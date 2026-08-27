@@ -1,7 +1,7 @@
 {
   "name": "tsshogi-detect",
   "version": "0.1.0",
-  "description": "Castle / formation detection for tsshogi — TypeScript port of tsshogi-dart's template engine",
+  "description": "Castle, technique, and proverb-pattern detection for tsshogi",
   "type": "module",
   "module": "src/index.ts",
   "types": "src/index.ts",
