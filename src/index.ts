@@ -23,6 +23,14 @@ export {
 export { MoveHistory } from './move-history.ts'
 export { PositionOnlyHistory, positionOnlyHistory } from './position-history.ts'
 export {
+  type DetectedProverb,
+  detectProverbsAtMove,
+  KNOWN_PROVERBS,
+  type ProverbPattern,
+  type ProverbRelation,
+  recordProverbs,
+} from './proverb.ts'
+export {
   AnyOfPieces,
   AnyPiece,
   type CastleRequirement,
@@ -55,6 +63,14 @@ export {
   recordStrategies,
   type StrategyTemplate,
 } from './strategy.ts'
+export {
+  type DetectedTechnique,
+  detectTechniquesAtMove,
+  KNOWN_TECHNIQUES,
+  recordTechniques,
+  recordTechniquesFirstOccurrence,
+  type TechniqueTemplate,
+} from './technique.ts'
 export type {
   BishopExchange,
   DetectedTemplate,
