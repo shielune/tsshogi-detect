@@ -52,7 +52,19 @@ const strategies = recordStrategies(moves)
 tsshogi-dart と共通）。`src/*.gen.ts` は現状、親アプリ側の
 `scripts/kifu/generate-templates-ts.ts` で生成している
 （あちらの `assets/shogi/*.txt` が正で、`data/*.txt` はその写し）。
-テンプレートを変更したらそちらで再生成してコミットする。
+テンプレートを変更したらそちらで再生成してコミットする（`.gen.ts` と `data/*.txt` は
+同じ生成器が同時に書き出すので、写しだけが古くなることはない）。
+
+## 版の差分
+
+どのテンプレートが増えたか、どの定義が変わったかを版どうしで比べる。
+`CHANGELOG.md` の「足したもの」「変えたもの」はこの出力から書き起こしている。
+
+```
+bun run scripts/diff-templates.ts v0.1.0           # その版と作業ツリー
+bun run scripts/diff-templates.ts v0.1.0 v0.2.0    # 版どうし
+bun run scripts/diff-templates.ts v0.1.0 --all     # 名前を省略せず全部出す
+```
 
 ## 検証
 
