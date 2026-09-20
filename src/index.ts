@@ -6,6 +6,41 @@ export {
   KNOWN_CASTLES,
   recordCastles,
 } from './castle.ts'
+export {
+  cellFromToken,
+  type CellSide,
+  flipCellSide,
+  normalizeCell,
+  PIECE_ORDER,
+  PIECE_SFEN,
+  type TemplateCell,
+  tokenFromCell,
+} from './cell-token.ts'
+export {
+  type CellEdit,
+  type CellSpan,
+  extractGrid,
+  type GridExtraction,
+  type GridRow,
+  replaceCellToken,
+  replaceCellTokens,
+  type TemplateGrid,
+} from './grid-text.ts'
+export {
+  addHeaderRequirement,
+  isHeaderRequirement,
+  removeHeaderRequirement,
+  updateHeaderRequirement,
+} from './header-requirement.ts'
+export {
+  type HeaderLine,
+  headerLines,
+  insertHeaderLine,
+  readTemplateName,
+  setHeaderField,
+  setTemplateName,
+  writeHeaderLine,
+} from './header-text.ts'
 export { ancestorTemplates, categoryRollup, dropUnestablishedChildren } from './hierarchy.ts'
 export {
   detectTemplates,
@@ -20,6 +55,18 @@ export {
   usesDroppedPiece,
 } from './match.ts'
 export { MoveHistory } from './move-history.ts'
+export {
+  type CellTokenParse,
+  type ParsedFinishMove,
+  type ParsedTemplate,
+  parseTemplateFile,
+  type PlacementCell,
+  type PlacementKind,
+  SFEN_PIECES,
+  stripComments,
+  TemplateSyntaxError,
+  tryParseCellToken,
+} from './parser.ts'
 export { PositionOnlyHistory, positionOnlyHistory } from './position-history.ts'
 export {
   type DetectedProverb,
