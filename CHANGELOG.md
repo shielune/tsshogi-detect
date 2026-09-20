@@ -14,6 +14,19 @@
 - 格言パターン 13 件 (`KNOWN_PROVERBS`) と `detectProverbsAtMove` / `recordProverbs`。
   手が好手かどうかは判定せず、盤上で確かめられる関係 (`follows` / `pattern` /
   `state` / `violates`) だけを返す。
+- テンプレート定義ファイル (`data/*.txt`) の解析器。`parseTemplateFile` が定義文の
+  全体を読み、`tryParseCellToken` が升のトークン 1 つを読む。`TemplateSyntaxError` は
+  行番号を持つので、定義を書く側に場所を返せる。拡張記法 (`finish:` `category:`
+  `?` による OR 指定、`no_drop:` `bishop_exchange:`) もここで解く。
+- 定義文を機械的に編集するための道具立て。升のトークンと `TemplateCell` を行き来する
+  `cellFromToken` / `tokenFromCell` / `normalizeCell` / `flipCellSide`、盤面の格子を
+  取り出して升を差し替える `extractGrid` / `replaceCellToken` / `replaceCellTokens`、
+  ヘッダ行を読み書きする `readTemplateName` / `setTemplateName` / `setHeaderField` /
+  `insertHeaderLine`、ヘッダ由来の要件を足し引きする `addHeaderRequirement` /
+  `updateHeaderRequirement` / `removeHeaderRequirement`。
+- `data/*.txt` から `src/castles.gen.ts` / `src/strategies.gen.ts` を書き出す生成器
+  (`bun run generate`)。これまで定義ファイルは当リポジトリに置きながら、それを読む
+  解析器と生成器は親アプリ側にあった。解析器がこちらに来たので、生成もこちらで完結する。
 
 手筋と格言はテンプレート照合を通さない別系統なので、`scripts/diff-templates.ts` の
 対象には入らない。
