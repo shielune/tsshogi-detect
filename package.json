@@ -1,6 +1,6 @@
 {
   "name": "tsshogi-detect",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Castle / formation detection for tsshogi — TypeScript port of tsshogi-dart's template engine",
   "type": "module",
   "module": "src/index.ts",
