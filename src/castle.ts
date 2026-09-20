@@ -5,26 +5,15 @@
  * 要件が 180° 回転して照合される。データは castles.gen.ts に切り出してある。
  *
  * 照合と走査そのものは囲いに限らないので match.ts と scan.ts に移してある。
- * ここに残るのは**囲いという母集団**を当てて呼ぶだけの層と、その名前。
+ * ここに残るのは**囲いという母集団**を当てて呼ぶだけの層。
  */
 
 import type { Color, ImmutablePosition, Move, Position } from 'tsshogi'
 import { KNOWN_CASTLES } from './castles.gen.ts'
-import {
-  detectTemplates,
-  hasHistoryRequirement,
-  hasPlyConstraint,
-  matchesTemplate,
-  satisfiesPlyConstraint,
-} from './match.ts'
+import { detectTemplates } from './match.ts'
 import type { MoveHistory } from './move-history.ts'
 import { recordTemplates } from './scan.ts'
-import type { CastleTemplate, DetectedTemplate, DetectedTemplateAt } from './template.ts'
-
-/**
- * 囲いテンプレート。中身は `FormationTemplate` (囲いと戦法で同じ形) と同じもの。
- */
-export type { CastleTemplate }
+import type { DetectedTemplate, DetectedTemplateAt, FormationTemplate } from './template.ts'
 
 export type DetectedCastle = DetectedTemplate
 
@@ -32,12 +21,9 @@ export type DetectedCastleAt = DetectedTemplateAt
 
 export { KNOWN_CASTLES }
 
-export function findCastle(name: string): CastleTemplate | undefined {
+export function findCastle(name: string): FormationTemplate | undefined {
   return KNOWN_CASTLES.find((t) => t.name === name || (t.aliases ?? []).includes(name))
 }
-
-// 判定は囲い専用ではなくなったので実体は match.ts にある。名前はここにも残す
-export { hasPlyConstraint, hasHistoryRequirement, satisfiesPlyConstraint, matchesTemplate }
 
 /**
  * 局面だけから囲いを検出する。side を省略すると両陣営。

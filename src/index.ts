@@ -1,5 +1,4 @@
 export {
-  type CastleTemplate,
   type DetectedCastle,
   type DetectedCastleAt,
   detectCastles,
@@ -33,7 +32,6 @@ export {
 export {
   AnyOfPieces,
   AnyPiece,
-  type CastleRequirement,
   EmptySquare,
   HandPiece,
   isHistoryRequirement,
@@ -46,6 +44,7 @@ export {
   PieceUnmoved,
   PieceVisited,
   rotate,
+  type TemplateRequirement,
   type TemplateSquare,
 } from './requirements.ts'
 export {

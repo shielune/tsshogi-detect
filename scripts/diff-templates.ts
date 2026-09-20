@@ -14,7 +14,7 @@
 import { execFileSync } from 'node:child_process'
 import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { CastleRequirement } from '../src/requirements.ts'
+import type { TemplateRequirement } from '../src/requirements.ts'
 import type { FormationTemplate } from '../src/template.ts'
 
 const SRC = join(import.meta.dir, '..', 'src')
@@ -37,7 +37,7 @@ const LIST_LIMIT = 20
 type Facets = ReadonlyMap<string, string>
 
 /** 要件 1 件の文字列表現。クラス名を頭に付けないと、同じ升を指す別種の要件が同一に見える。 */
-function requirementKey(requirement: CastleRequirement): string {
+function requirementKey(requirement: TemplateRequirement): string {
   const fields = Object.entries(requirement as unknown as Record<string, unknown>)
     .filter(([, value]) => value !== undefined)
     .sort(([a], [b]) => (a < b ? -1 : 1))

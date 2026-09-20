@@ -1,5 +1,5 @@
 /**
- * 囲いテンプレートを構成する要件 (tsshogi-dart lib/src/castle.dart の移植)。
+ * 囲い・戦法テンプレートを構成する要件 (tsshogi-dart lib/src/castle.dart の移植)。
  *
  * 要件は 3 系統。
  *  1. 盤上 1 マスへの要件 — file/rank は先手視点で持ち、後手判定では 180° 回転する
@@ -21,7 +21,7 @@ export function rotate(file: number, rank: number, side: Color): Square {
   return side === Color.BLACK ? new Square(file, rank) : new Square(10 - file, 10 - rank)
 }
 
-export interface CastleRequirement {
+export interface TemplateRequirement {
   readonly kind: string
   isSatisfiedBy(position: ImmutablePosition, side: Color, history?: MoveHistory): boolean
   /**
@@ -34,7 +34,7 @@ export interface CastleRequirement {
 }
 
 /** 駒種を厳密に指定する 1 マスの要件。 */
-export class PiecePlacement implements CastleRequirement {
+export class PiecePlacement implements TemplateRequirement {
   readonly kind = 'piece'
   readonly file: number
   readonly rank: number
@@ -65,7 +65,7 @@ export class PiecePlacement implements CastleRequirement {
 }
 
 /** 候補駒種のいずれかにマッチする 1 マスの要件 (テンプレ `[GS]`)。 */
-export class AnyOfPieces implements CastleRequirement {
+export class AnyOfPieces implements TemplateRequirement {
   readonly kind = 'anyOf'
   readonly file: number
   readonly rank: number
@@ -89,7 +89,7 @@ export class AnyOfPieces implements CastleRequirement {
 }
 
 /** 指定マスが完全に空であることを要求する (テンプレ `_`)。 */
-export class EmptySquare implements CastleRequirement {
+export class EmptySquare implements TemplateRequirement {
   readonly kind = 'empty'
   readonly file: number
   readonly rank: number
@@ -105,7 +105,7 @@ export class EmptySquare implements CastleRequirement {
 }
 
 /** 指定マスに side の除外駒種が無いことを要求する (テンプレ `[!GS]`)。空マスや相手駒は満たす。 */
-export class NotOfPieces implements CastleRequirement {
+export class NotOfPieces implements TemplateRequirement {
   readonly kind = 'notOf'
   readonly file: number
   readonly rank: number
@@ -125,7 +125,7 @@ export class NotOfPieces implements CastleRequirement {
 }
 
 /** 指定マスに side の駒が種類を問わずあることを要求する (テンプレ `*`)。 */
-export class AnyPiece implements CastleRequirement {
+export class AnyPiece implements TemplateRequirement {
   readonly kind = 'anyPiece'
   readonly file: number
   readonly rank: number
@@ -154,7 +154,7 @@ export class AnyPiece implements CastleRequirement {
  *
  * 升が空なら**常に偽**にする (真に倒すと、書き損じた `?` が定義をすり抜ける)。
  */
-export class PieceInSquares implements CastleRequirement {
+export class PieceInSquares implements TemplateRequirement {
   readonly kind = 'pieceInSquares'
   readonly squares: readonly TemplateSquare[]
   readonly options: readonly PieceType[]
@@ -192,7 +192,7 @@ export class PieceInSquares implements CastleRequirement {
 }
 
 /** side の指定駒種が盤上のどこかにあることを要求する。マスに紐づかないので回転しない。 */
-export class PieceAnywhere implements CastleRequirement {
+export class PieceAnywhere implements TemplateRequirement {
   readonly kind = 'anywhere'
   readonly pieceType: PieceType
 
@@ -209,7 +209,7 @@ export class PieceAnywhere implements CastleRequirement {
 }
 
 /** side が指定駒を持駒に minCount 枚以上持つことを要求する。 */
-export class HandPiece implements CastleRequirement {
+export class HandPiece implements TemplateRequirement {
   readonly kind = 'hand'
   readonly pieceType: PieceType
   readonly minCount: number
@@ -225,7 +225,7 @@ export class HandPiece implements CastleRequirement {
 }
 
 /** side が指定マスから一度も動いていないことを要求する (履歴依存)。 */
-export class PieceUnmoved implements CastleRequirement {
+export class PieceUnmoved implements TemplateRequirement {
   readonly kind = 'unmoved'
   readonly file: number
   readonly rank: number
@@ -242,7 +242,7 @@ export class PieceUnmoved implements CastleRequirement {
 }
 
 /** side の指定駒種が指定マスを過去に通過したことを要求する (履歴依存)。 */
-export class PieceVisited implements CastleRequirement {
+export class PieceVisited implements TemplateRequirement {
   readonly kind = 'visited'
   readonly file: number
   readonly rank: number
@@ -265,7 +265,7 @@ export class PieceVisited implements CastleRequirement {
  * (歩・角以外が初めて取られた手) 以降なら満たす。「戦いが始まるまで囲わなかった」
  * を含めて評価するので、このテンプレは game-end 評価に回す。
  */
-export class KingIgyoku implements CastleRequirement {
+export class KingIgyoku implements TemplateRequirement {
   readonly kind = 'igyoku'
 
   isSatisfiedBy(_position: ImmutablePosition, side: Color, history?: MoveHistory): boolean {
@@ -280,7 +280,7 @@ export class KingIgyoku implements CastleRequirement {
 
 const HISTORY_KINDS: ReadonlySet<string> = new Set(['unmoved', 'visited', 'igyoku'])
 
-export function isHistoryRequirement(requirement: CastleRequirement): boolean {
+export function isHistoryRequirement(requirement: TemplateRequirement): boolean {
   return HISTORY_KINDS.has(requirement.kind)
 }
 
