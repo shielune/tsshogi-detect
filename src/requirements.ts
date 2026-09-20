@@ -10,6 +10,12 @@
 import { Color, type ImmutablePosition, PieceType, Square, unpromotedPieceType } from 'tsshogi'
 import type { MoveHistory } from './move-history.ts'
 
+/** テンプレ視点 (先手視点) の升。後手の判定では 180° 回転する。 */
+export interface TemplateSquare {
+  readonly file: number
+  readonly rank: number
+}
+
 /** 先手視点の座標を side 視点に変換する。後手なら 180° 回転。 */
 export function rotate(file: number, rank: number, side: Color): Square {
   return side === Color.BLACK ? new Square(file, rank) : new Square(10 - file, 10 - rank)
@@ -18,6 +24,13 @@ export function rotate(file: number, rank: number, side: Color): Square {
 export interface CastleRequirement {
   readonly kind: string
   isSatisfiedBy(position: ImmutablePosition, side: Color, history?: MoveHistory): boolean
+  /**
+   * side の駒が居ることを求めている升 (side 視点に回転済み)。持たない要件は実装しない。
+   *
+   * 空升 (`_`)・否定 (`[!GS]`)・相手駒の指定・盤全体や持駒の要件は、その陣営が
+   * 組んだ形を指していないので返さない。`no_drop:` の判定はこれだけを見る。
+   */
+  ownPieceSquares?(side: Color): readonly Square[]
 }
 
 /** 駒種を厳密に指定する 1 マスの要件。 */
@@ -43,6 +56,12 @@ export class PiecePlacement implements CastleRequirement {
       this.color === Color.BLACK ? side : side === Color.BLACK ? Color.WHITE : Color.BLACK
     return piece.color === expected && piece.type === this.pieceType
   }
+
+  /** 相手駒の指定 (color = WHITE) はその陣営が組んだ形ではないので返さない。 */
+  ownPieceSquares(side: Color): readonly Square[] {
+    if (this.color !== Color.BLACK) return []
+    return [rotate(this.file, this.rank, side)]
+  }
 }
 
 /** 候補駒種のいずれかにマッチする 1 マスの要件 (テンプレ `[GS]`)。 */
@@ -62,6 +81,10 @@ export class AnyOfPieces implements CastleRequirement {
     const piece = position.board.at(rotate(this.file, this.rank, side))
     if (piece === null || piece.color !== side) return false
     return this.options.includes(piece.type)
+  }
+
+  ownPieceSquares(side: Color): readonly Square[] {
+    return [rotate(this.file, this.rank, side)]
   }
 }
 
@@ -115,6 +138,56 @@ export class AnyPiece implements CastleRequirement {
   isSatisfiedBy(position: ImmutablePosition, side: Color): boolean {
     const piece = position.board.at(rotate(this.file, this.rank, side))
     return piece !== null && piece.color === side
+  }
+
+  ownPieceSquares(side: Color): readonly Square[] {
+    return [rotate(this.file, this.rank, side)]
+  }
+}
+
+/**
+ * 並べた升の**いずれか 1 つ**に、指定した駒種のどれかがあること (テンプレ `?X`)。
+ *
+ * 「相手が振り飛車である」= 相手の飛車が 5〜1 筋のどこか、のように、位置が動く駒を
+ * 定義に書くための唯一の手段。1 升 1 要件で AND に畳まれる他の要件と違い、これ 1 件で
+ * 升をまたぐ。
+ *
+ * 升が空なら**常に偽**にする (真に倒すと、書き損じた `?` が定義をすり抜ける)。
+ */
+export class PieceInSquares implements CastleRequirement {
+  readonly kind = 'pieceInSquares'
+  readonly squares: readonly TemplateSquare[]
+  readonly options: readonly PieceType[]
+  /** テンプレ視点の絶対色。BLACK はテンプレ自陣、WHITE はテンプレ相手陣の駒。 */
+  readonly color: Color
+
+  constructor(
+    squares: readonly TemplateSquare[],
+    options: readonly PieceType[],
+    color: Color = Color.BLACK,
+  ) {
+    this.squares = squares
+    this.options = options
+    this.color = color
+  }
+
+  isSatisfiedBy(position: ImmutablePosition, side: Color): boolean {
+    const expected =
+      this.color === Color.BLACK ? side : side === Color.BLACK ? Color.WHITE : Color.BLACK
+    return this.squares.some((square) => {
+      const piece = position.board.at(rotate(square.file, square.rank, side))
+      if (piece === null || piece.color !== expected) return false
+      return this.options.includes(piece.type)
+    })
+  }
+
+  /**
+   * どの升で満たしたかは局面を見ないと決まらないので、候補の升をすべて返す。
+   * `no_drop:` では「候補のどれかに打った駒が乗っていれば認めない」と読むことになる。
+   */
+  ownPieceSquares(side: Color): readonly Square[] {
+    if (this.color !== Color.BLACK) return []
+    return this.squares.map((square) => rotate(square.file, square.rank, side))
   }
 }
 
