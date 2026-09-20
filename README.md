@@ -39,8 +39,9 @@ const at = recordCastles(moves)
 ## データの再生成
 
 テンプレートの正は `data/castles.txt`（bioshogi 由来の構造化データ、tsshogi-dart と共通）。
-`src/castles.gen.ts` は現状、親アプリ側の `scripts/kifu/generate_castles_ts.py`（Python パーサ経由）で
-生成している。テンプレートを変更したらそちらで再生成してコミットする。
+`src/castles.gen.ts` は現状、親アプリ側の `scripts/kifu/generate-templates-ts.ts` で生成している
+（あちらの `assets/shogi/castles.txt` が正で、`data/castles.txt` はその写し）。
+テンプレートを変更したらそちらで再生成してコミットする。
 
 ## 検証
 
