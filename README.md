@@ -1,10 +1,13 @@
 # tsshogi-detect
 
-[tsshogi](https://github.com/sunfish-shogi/tsshogi) の拡張パッケージ。局面・棋譜から囲いと戦法を検出する。
-[tsshogi-dart](https://github.com/shielune/tsshogi-dart) のテンプレートエンジン（castle.dart / move_history.dart）の TypeScript 移植。
+[tsshogi](https://github.com/sunfish-shogi/tsshogi) の拡張パッケージ。局面・棋譜から囲いと戦法を、
+指し手から手筋と格言パターンを検出する。
+テンプレートエンジン（castle.dart / move_history.dart）と手筋の基礎実装は
+[tsshogi-dart](https://github.com/shielune/tsshogi-dart) の TypeScript 移植。
+
+## 囲いと戦法
 
 ```ts
-import { Record } from 'tsshogi'
 import { detectCastles, recordCastles, recordStrategies } from 'tsshogi-detect'
 
 // 局面スナップショットから検出
@@ -20,9 +23,47 @@ const strategies = recordStrategies(moves)
 // => [{ template: { name: '四間飛車', ... }, side: 'black', ply: 12 }]
 ```
 
+## 手筋
+
+手筋は直前の指し手と、その前後の局面から判定する。`KNOWN_TECHNIQUES` には 103 件を収録している。
+
+```ts
+import { detectTechniquesAtMove, recordTechniques } from 'tsshogi-detect'
+
+const before = position.clone()
+position.doMove(move, { ignoreValidation: true })
+const techniques = detectTechniquesAtMove(move, before, position)
+// => [{ name: 'たたきの歩', aliases: ['叩きの歩'], matches: ... }, ...]
+
+// 棋譜全体。同じ手筋が複数回出ればその都度返す
+const at = recordTechniques(moves)
+// => [{ template, color: 'black', ply: 42 }, ...]
+```
+
+同じ `(手筋名, 陣営)` を最初の 1 回だけ取得する場合は `recordTechniquesFirstOccurrence` を使う。
+`連打の歩` と `継ぎ歩` のように直前手より前の履歴が必要なものは、現在の単手 API では検出しない。
+
+## 格言パターン
+
+格言は「この手が好手である」といった価値判断をせず、盤上から機械的に確認できる関係だけを返す。
+`relation` は `follows` / `pattern` / `state` / `violates` の 4 種。
+
+```ts
+import { detectProverbsAtMove } from 'tsshogi-detect'
+
+// 手筋結果を渡すと再検出を省ける
+const proverbs = detectProverbsAtMove(move, before, position, techniques)
+// => [{ name: '焦点の歩に好手あり', relation: 'pattern', matches: ... }]
+```
+
+たとえば `pattern` は格言に典型的な形であることだけを意味し、その手の評価を保証しない。
+棋譜全体を走査する場合は `recordProverbs(moves)` を使う。
+
 ## 構成
 
 照合エンジンと、そこに囲い・戦法という母集団を当てる層に分かれている。
+手筋と格言はテンプレート照合を使わず、指し手と前後の局面を直に見る別系統で、
+`src/technique.ts` と `src/proverb.ts` に閉じている。
 
 - `src/template.ts` — テンプレートの型 `FormationTemplate`（`CastleTemplate` はその別名）
 - `src/requirements.ts` — テンプレートを構成する要件（盤上セル / 盤面全体 / 履歴依存）
@@ -35,6 +76,8 @@ const strategies = recordStrategies(moves)
 - `src/castles.gen.ts` — 囲いテンプレート 113 件（生成物、手で編集しない）
 - `src/strategy.ts` — 戦法を当てて呼ぶ層。`detectStrategies` / `recordStrategies`
 - `src/strategies.gen.ts` — 戦法テンプレート 244 件（生成物、手で編集しない）
+- `src/technique.ts` — 手筋 103 件と、その判定。`detectTechniquesAtMove` / `recordTechniques`
+- `src/proverb.ts` — 格言パターン 13 件と、その判定。`detectProverbsAtMove` / `recordProverbs`
 
 テンプレートは位置ベースのパターンに加えて、成立手数（`plyEq` / `plyMin` / `plyMax`）、
 打って揃えた形の排除（`noDrop`）、角交換の有無と仕掛けた側（`bishopExchange`）、
@@ -68,16 +111,18 @@ bun run scripts/diff-templates.ts v0.1.0 --all     # 名前を省略せず全部
 
 ## 検証
 
-Python 実装（app/shogi、同じ Dart 移植）との差分検査で、実戦 1500 局・囲い延べ 3583 件の
+囲いは Python 実装（app/shogi、同じ Dart 移植）との差分検査で、実戦 1500 局・囲い延べ 3583 件の
 `recordCastles` が両方向で完全一致することを確認済み。
+手筋 103 件の名前・順序と格言 13 件の名前・relation も Python 実装と一致する。
 
-```
+```sh
 bun test
 bun run typecheck
 ```
 
 ## スコープ
 
-同梱するテンプレートデータは囲い 113 件と戦法 244 件。手筋（techniques）はエンジンとしては
-扱えるが、データは未移植。
-「あと一手で完成」のような解説向けの派生判定はこのパッケージには含めない。
+- 囲いと戦法: 局面・棋譜から成立形を検出する。同梱するテンプレートは囲い 113 件と戦法 244 件。
+- 手筋: 1 手と前後の局面だけで機械的に判定できるものを扱う。103 件。
+- 格言: 盤上で確認できるパターンと関係だけを扱い、手の善悪は評価しない。13 件。
+- 「あと一手で完成」のような解説向けの派生判定はこのパッケージには含めない。
