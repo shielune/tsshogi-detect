@@ -18,6 +18,20 @@
 手筋と格言はテンプレート照合を通さない別系統なので、`scripts/diff-templates.ts` の
 対象には入らない。
 
+### 壊したもの
+
+囲いだけを扱っていた頃の名前を落とした。移し替えは名前を置き換えるだけで済む。
+
+- 型 `CastleTemplate` を廃止した。`FormationTemplate` を使う。
+- 型 `CastleRequirement` を `TemplateRequirement` に改名した。旧名は残していない。
+- `src/castle.ts` から `hasPlyConstraint` / `hasHistoryRequirement` /
+  `satisfiesPlyConstraint` / `matchesTemplate` の再輸出を外した。実体は `src/match.ts`
+  にあり、パッケージの入口 (`src/index.ts`) からは今までどおり引ける。
+  `tsshogi-detect/src/castle.ts` を直に指している import だけが影響を受ける。
+
+`detectCastles` / `recordCastles` / `findCastle` / `KNOWN_CASTLES` は変わっていない。
+テンプレートの `aliases` (囲いや戦法の別名) も、これとは別の話なのでそのまま。
+
 ## 0.2.0 (2026-09-20)
 
 ### 足したもの

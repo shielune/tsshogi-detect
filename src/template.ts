@@ -2,11 +2,11 @@
  * 囲い・戦法テンプレートの型。
  *
  * 囲いと戦法は「先手視点の升に要件を並べ、後手は 180° 回して照らす」という同じ作りなので、
- * 型は 1 つにしてある。囲いだけを扱っていた頃の名前 `CastleTemplate` は別名として残す。
+ * 型は 1 つにしてある。
  */
 
 import type { Color, PieceType } from 'tsshogi'
-import type { CastleRequirement, TemplateSquare } from './requirements.ts'
+import type { TemplateRequirement, TemplateSquare } from './requirements.ts'
 
 /** 升の型は要件の語彙なので requirements.ts が持つ。テンプレ側からも引けるようにする。 */
 export type { TemplateSquare }
@@ -100,11 +100,8 @@ export interface FormationTemplate {
    * `from` を持たない項目は着地升だけを見る。空・省略なら制限なし。
    */
   readonly finishMoves?: readonly TemplateFinishMove[]
-  readonly placements: readonly CastleRequirement[]
+  readonly placements: readonly TemplateRequirement[]
 }
-
-/** 囲いだけを扱っていた頃の名前。中身は `FormationTemplate` と同じ。 */
-export type CastleTemplate = FormationTemplate
 
 export interface DetectedTemplate {
   readonly template: FormationTemplate

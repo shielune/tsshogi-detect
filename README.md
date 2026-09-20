@@ -65,8 +65,8 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 手筋と格言はテンプレート照合を使わず、指し手と前後の局面を直に見る別系統で、
 `src/technique.ts` と `src/proverb.ts` に閉じている。
 
-- `src/template.ts` — テンプレートの型 `FormationTemplate`（`CastleTemplate` はその別名）
-- `src/requirements.ts` — テンプレートを構成する要件（盤上セル / 盤面全体 / 履歴依存）
+- `src/template.ts` — テンプレートの型 `FormationTemplate`
+- `src/requirements.ts` — テンプレートを構成する要件 `TemplateRequirement`（盤上セル / 盤面全体 / 履歴依存）
 - `src/move-history.ts` — 棋譜走査中の駒移動履歴（PieceUnmoved / PieceVisited / 居玉 / 打った駒 / 角交換）
 - `src/position-history.ts` — 履歴なしで照合するときの擬似履歴（初期位置の駒は動いていないと見なす）
 - `src/match.ts` — 1 局面 1 テンプレの照合

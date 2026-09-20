@@ -1,14 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Color, type Move, Record as ShogiRecord } from 'tsshogi'
-import {
-  detectCastles,
-  findCastle,
-  hasHistoryRequirement,
-  hasPlyConstraint,
-  KNOWN_CASTLES,
-  matchesTemplate,
-  recordCastles,
-} from '../src/castle.ts'
+import { detectCastles, findCastle, KNOWN_CASTLES, recordCastles } from '../src/castle.ts'
+import { hasHistoryRequirement, hasPlyConstraint, matchesTemplate } from '../src/match.ts'
 
 /** 実戦の序盤 30 手。28 手目に後手の片美濃囲いが成立する。 */
 const MOVES =
