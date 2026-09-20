@@ -1,11 +1,11 @@
 # tsshogi-detect
 
-[tsshogi](https://github.com/sunfish-shogi/tsshogi) の拡張パッケージ。局面・棋譜から囲いを検出する。
+[tsshogi](https://github.com/sunfish-shogi/tsshogi) の拡張パッケージ。局面・棋譜から囲いと戦法を検出する。
 [tsshogi-dart](https://github.com/shielune/tsshogi-dart) のテンプレートエンジン（castle.dart / move_history.dart）の TypeScript 移植。
 
 ```ts
 import { Record } from 'tsshogi'
-import { detectCastles, recordCastles } from 'tsshogi-detect'
+import { detectCastles, recordCastles, recordStrategies } from 'tsshogi-detect'
 
 // 局面スナップショットから検出
 const detected = detectCastles(record.position)
@@ -14,11 +14,15 @@ const detected = detectCastles(record.position)
 // 棋譜を走査して「初めて成立した手」を得る
 const at = recordCastles(moves)
 // => [{ template, side, ply: 34 }]
+
+// 戦法も同じ形で返る
+const strategies = recordStrategies(moves)
+// => [{ template: { name: '四間飛車', ... }, side: 'black', ply: 12 }]
 ```
 
 ## 構成
 
-照合エンジンと、そこに囲いという母集団を当てる層に分かれている。
+照合エンジンと、そこに囲い・戦法という母集団を当てる層に分かれている。
 
 - `src/template.ts` — テンプレートの型 `FormationTemplate`（`CastleTemplate` はその別名）
 - `src/requirements.ts` — テンプレートを構成する要件（盤上セル / 盤面全体 / 履歴依存）
@@ -29,18 +33,25 @@ const at = recordCastles(moves)
 - `src/scan.ts` — 棋譜の走査（`recordTemplates`）
 - `src/castle.ts` — 囲いを当てて呼ぶ層。`detectCastles` / `recordCastles`
 - `src/castles.gen.ts` — 囲いテンプレート 113 件（生成物、手で編集しない）
+- `src/strategy.ts` — 戦法を当てて呼ぶ層。`detectStrategies` / `recordStrategies`
+- `src/strategies.gen.ts` — 戦法テンプレート 244 件（生成物、手で編集しない）
 
 テンプレートは位置ベースのパターンに加えて、成立手数（`plyEq` / `plyMin` / `plyMax`）、
 打って揃えた形の排除（`noDrop`）、角交換の有無と仕掛けた側（`bishopExchange`）、
 成立を認める最終手（`finishMoves`）、盤の形を持たない分類の節（`category`）を指定できる。
-囲い以外の母集団（戦法など）は `detectTemplates` / `recordTemplates` に自分のテンプレート列を
+同梱の 2 つ以外の母集団も、`detectTemplates` / `recordTemplates` に自分のテンプレート列を
 渡せばそのまま扱える。
+
+囲いと戦法で走査の細目だけが違う。戦法は成立を指した側に限り（`moverOnly`）、親が
+成立していない子を落とす（`requireParent`）。囲いは代わりに、ちゃんとした囲いが成立して
+いる陣営には居玉を出さない（`suppressGameEndIfDetected`）。
 
 ## データの再生成
 
-テンプレートの正は `data/castles.txt`（bioshogi 由来の構造化データ、tsshogi-dart と共通）。
-`src/castles.gen.ts` は現状、親アプリ側の `scripts/kifu/generate-templates-ts.ts` で生成している
-（あちらの `assets/shogi/castles.txt` が正で、`data/castles.txt` はその写し）。
+テンプレートの正は `data/castles.txt` と `data/strategies.txt`（bioshogi 由来の構造化データ、
+tsshogi-dart と共通）。`src/*.gen.ts` は現状、親アプリ側の
+`scripts/kifu/generate-templates-ts.ts` で生成している
+（あちらの `assets/shogi/*.txt` が正で、`data/*.txt` はその写し）。
 テンプレートを変更したらそちらで再生成してコミットする。
 
 ## 検証
@@ -55,6 +66,6 @@ bun run typecheck
 
 ## スコープ
 
-同梱するテンプレートデータは囲い 113 件のみ。戦型（strategies）・手筋（techniques）は
-エンジンとしては扱えるが、データは未移植。
+同梱するテンプレートデータは囲い 113 件と戦法 244 件。手筋（techniques）はエンジンとしては
+扱えるが、データは未移植。
 「あと一手で完成」のような解説向けの派生判定はこのパッケージには含めない。

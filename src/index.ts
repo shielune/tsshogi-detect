@@ -46,6 +46,15 @@ export {
   recordTemplates,
   recordTemplatesWithDropped,
 } from './scan.ts'
+export {
+  type DetectedStrategy,
+  type DetectedStrategyAt,
+  detectStrategies,
+  findStrategy,
+  KNOWN_STRATEGIES,
+  recordStrategies,
+  type StrategyTemplate,
+} from './strategy.ts'
 export type {
   BishopExchange,
   DetectedTemplate,
