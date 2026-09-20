@@ -1,6 +1,6 @@
 {
   "name": "tsshogi-detect",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Castle / formation, technique, and proverb-pattern detection for tsshogi",
   "type": "module",
   "module": "src/index.ts",

@@ -3,6 +3,21 @@
 版ごとの変わりどころ。テンプレートの増減と定義の変更は
 `bun run scripts/diff-templates.ts <前の版>` の出力から書き起こしている。
 
+## 0.3.0 (2026-09-20)
+
+### 足したもの
+
+- 手筋 103 件 (`KNOWN_TECHNIQUES`) と、1 手ごとに判定する `detectTechniquesAtMove`、
+  棋譜を走査する `recordTechniques` / `recordTechniquesFirstOccurrence`。
+  tsshogi-dart から移した 94 件に、1 手と前後の局面だけで客観的に判定できる 9 件を足した。
+  `連打の歩` と `継ぎ歩` のように直前手より前の履歴が要るものは、まだ扱わない。
+- 格言パターン 13 件 (`KNOWN_PROVERBS`) と `detectProverbsAtMove` / `recordProverbs`。
+  手が好手かどうかは判定せず、盤上で確かめられる関係 (`follows` / `pattern` /
+  `state` / `violates`) だけを返す。
+
+手筋と格言はテンプレート照合を通さない別系統なので、`scripts/diff-templates.ts` の
+対象には入らない。
+
 ## 0.2.0 (2026-09-20)
 
 ### 足したもの
