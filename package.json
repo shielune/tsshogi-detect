@@ -11,7 +11,8 @@
   "files": ["src", "data"],
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate": "bun run scripts/generate-templates.ts"
   },
   "repository": {
     "type": "git",

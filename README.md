@@ -92,11 +92,18 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 ## データの再生成
 
 テンプレートの正は `data/castles.txt` と `data/strategies.txt`（bioshogi 由来の構造化データ、
-tsshogi-dart と共通）。`src/*.gen.ts` は現状、親アプリ側の
-`scripts/kifu/generate-templates-ts.ts` で生成している
-（あちらの `assets/shogi/*.txt` が正で、`data/*.txt` はその写し）。
-テンプレートを変更したらそちらで再生成してコミットする（`.gen.ts` と `data/*.txt` は
-同じ生成器が同時に書き出すので、写しだけが古くなることはない）。
+tsshogi-dart と共通）。定義エディタで編集した分は、親アプリがデータベースから
+この 2 つへ書き戻す。
+
+`src/*.gen.ts` はその 2 つから書き出す。
+
+```
+bun run generate
+```
+
+読むのは同梱の解析器（`parseTemplateFile`）なので、拡張記法（`finish:` `category:`
+`?` による OR 指定、`no_drop:` `bishop_exchange:`）もそのまま通る。
+`data/*.txt` を変更したら再生成してコミットする。
 
 ## 版の差分
 
