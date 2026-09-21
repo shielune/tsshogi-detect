@@ -72,9 +72,11 @@ export interface FormationTemplate {
   readonly parent?: string
   readonly side?: FormationSide
   /**
-   * 盤の形を持たない分類の節 (`category: true`)。単体では成立せず、**子孫のどれかが
-   * 成立した陣営で**まとめて成立する (`振り飛車` `居飛車` のような、9x9 の升では
-   * 書けない概念)。要件を持たないので照合の対象からは外れる。
+   * 盤の形を持たない分類の節 (`category: true`)。`振り飛車` `居飛車` のような、
+   * 9x9 の升では書けない概念を系統の途中に置くための節で、**検出としては出てこない**。
+   *
+   * 要件を持たないので照合の対象から外れ、親ゲートでも素通しされる (hierarchy.ts)。
+   * `四間飛車` が出ていれば振り飛車であることは読む側が系統から辿れる。
    */
   readonly category?: boolean
   /** ちょうどこの手数でのみ成立を認める。 */

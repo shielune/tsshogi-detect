@@ -73,7 +73,7 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 - `src/move-history.ts` — 棋譜走査中の駒移動履歴（PieceUnmoved / PieceVisited / 居玉 / 打った駒 / 角交換）
 - `src/position-history.ts` — 履歴なしで照合するときの擬似履歴（初期位置の駒は動いていないと見なす）
 - `src/match.ts` — 1 局面 1 テンプレの照合
-- `src/hierarchy.ts` — 系統（`parent`）をたどる親ゲートとカテゴリの巻き上げ
+- `src/hierarchy.ts` — 系統（`parent`）をたどる親ゲート
 - `src/scan.ts` — 棋譜の走査（`recordTemplates`）
 - `src/order.ts` — 検出結果の並び順（`priorityOf` / `orderDetections` / `orderDetectionsWithinPly`）
 - `src/castle.ts` — 囲いを当てて呼ぶ層。`detectCastles` / `recordCastles`
@@ -85,7 +85,7 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 
 テンプレートは位置ベースのパターンに加えて、成立手数（`plyEq` / `plyMin` / `plyMax`）、
 打って揃えた形の排除（`noDrop`）、角交換の有無と仕掛けた側（`bishopExchange`）、
-成立を認める最終手（`finishMoves`）、盤の形を持たない分類の節（`category`）、
+成立を認める最終手（`finishMoves`）、系統を繋ぐだけの分類の節（`category`）、
 同時に成立したときの並び順（`priority`）を指定できる。
 同梱の 2 つ以外の母集団も、`detectTemplates` / `recordTemplates` に自分のテンプレート列を
 渡せばそのまま扱える。
@@ -100,8 +100,11 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 5. 名前。文字コードの昇順
 
 2 と 3 は「狭いことを言っている定義ほど代表にしたい」という同じ考えの二段構え。
-四間飛車と振り飛車が同じ手で成立したら、分類である振り飛車より具体の四間飛車が前に出る。
 並べ替えるのは同じ手数の中だけで、手数は今までどおり主たる順序のまま。
+
+`category: true` を書いた節（`振り飛車` `居飛車` `その他`）は系統を繋ぐためだけに
+あり、検出としては返らない。`四間飛車` が成立していれば振り飛車であることは `parent`
+を辿れば分かる。
 
 囲いと戦法で走査の細目だけが違う。戦法は成立を指した側に限り（`moverOnly`）、親が
 成立していない子を落とす（`requireParent`）。囲いは代わりに、ちゃんとした囲いが成立して

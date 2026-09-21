@@ -41,12 +41,7 @@ export {
   setTemplateName,
   writeHeaderLine,
 } from './header-text.ts'
-export {
-  ancestorDepths,
-  ancestorTemplates,
-  categoryRollup,
-  dropUnestablishedChildren,
-} from './hierarchy.ts'
+export { ancestorDepths, ancestorTemplates, dropUnestablishedChildren } from './hierarchy.ts'
 export {
   detectTemplates,
   hasBishopExchangeConstraint,

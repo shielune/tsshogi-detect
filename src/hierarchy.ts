@@ -1,5 +1,5 @@
 /**
- * テンプレの系統 (`parent:`) を使った、走査のあとの絞り込みと巻き上げ。
+ * テンプレの系統 (`parent:`) を使った、走査のあとの絞り込み。
  *
  * 囲い・戦法は系統になっていて、子は親を狭めた形になっている (`美濃囲い` の親は
  * `片美濃囲い`)。ここで扱うのはその関係だけで、盤の照合には立ち入らない。
@@ -23,7 +23,7 @@ function nameIndex(templates: readonly FormationTemplate[]): Map<string, Formati
 /** 親を辿る深さの上限。実データの最長は 5 代なので、これは循環と暴走の歯止め。 */
 const MAX_ANCESTOR_DEPTH = 16
 
-/** 索引を使い回す版。1 局に何度も辿る側 (親ゲート・巻き上げ) はこちらを呼ぶ。 */
+/** 索引を使い回す版。1 局に何度も辿る側 (親ゲート) はこちらを呼ぶ。 */
 function ancestorChain(
   template: FormationTemplate,
   index: ReadonlyMap<string, FormationTemplate>,
@@ -55,8 +55,8 @@ export function ancestorTemplates(
 }
 
 /**
- * 親ゲートで裏付けを見る相手。カテゴリは盤の形を持たず、子孫から巻き上げてしか
- * 成立しないので、系統の途中に挟まっていても**素通し**して非カテゴリの祖先まで登る。
+ * 親ゲートで裏付けを見る相手。カテゴリは盤の形を持たず単体では成立しないので、
+ * 系統の途中に挟まっていても**素通し**して非カテゴリの祖先まで登る。
  * (ここでカテゴリを親として見ると、間に 1 つ挟んだだけで親ゲートが効かなくなる)
  */
 function gateParent(
@@ -75,7 +75,7 @@ function gateParent(
  * - 親の成立は**子の成立手数まで**に済んでいること。子より後に成立した親は間に合っていない
  * - 親が落ちれば孫も落ちる (根まで遡って生き残ったものだけ残す)
  * - 親が走査集合に居ないときは判定しようが無いので素通しする
- * - **カテゴリは素通しの節**。単体では成立しないので裏付けを求めれば必ず落ちる。
+ * - **カテゴリは素通しの節**。そもそも成立しないので裏付けを求めれば必ず落ちる。
  *   見る相手はその先の非カテゴリの祖先まで登る (gateParent)
  */
 export function dropUnestablishedChildren(
@@ -111,39 +111,6 @@ export function dropUnestablishedChildren(
     return ok
   }
   return detections.filter((detected) => isEstablished(detected, new Set()))
-}
-
-/**
- * カテゴリ (盤の形を持たない分類の節) の成立を、子孫の成立から巻き上げる。
- *
- * カテゴリ C は、C を祖先に持つ検出が陣営 S にあれば S でも成立し、その手数は
- * **それらの最小値**。祖先の連なりをそのまま辿るので、入れ子のカテゴリも 1 度で片付く。
- *
- * 具体テンプレの成否はカテゴリを見ない (照合からも親ゲートからも外してある) ので、
- * この一方通行に循環は無い。
- */
-export function categoryRollup(
-  detections: readonly DetectedTemplateAt[],
-  templates: readonly FormationTemplate[],
-): DetectedTemplateAt[] {
-  if (!templates.some((template) => template.category === true)) return [...detections]
-  const index = nameIndex(templates)
-  const rolled = new Map<string, DetectedTemplateAt>()
-  for (const detected of detections) {
-    for (const ancestor of ancestorChain(detected.template, index)) {
-      if (ancestor.category !== true) continue
-      const key = `${ancestor.name}|${detected.side}`
-      const current = rolled.get(key)
-      if (current !== undefined && current.ply <= detected.ply) continue
-      rolled.set(key, { template: ancestor, side: detected.side, ply: detected.ply })
-    }
-  }
-  if (rolled.size === 0) return [...detections]
-
-  // 巻き上げた分は最後尾に積まれるので ply 順に戻す。同じ手数の中の順は
-  // ここでは決めない (order.ts が優先度・深さ・厳しさ・名前で決める)。
-  // 並べ替えは安定なので、同じ手数の検出どうしは走査の順のまま渡る。
-  return [...detections, ...rolled.values()].sort((a, b) => a.ply - b.ply)
 }
 
 /**

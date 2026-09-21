@@ -6,7 +6,7 @@
  */
 
 import { Color, type Move, Position } from 'tsshogi'
-import { categoryRollup, dropUnestablishedChildren } from './hierarchy.ts'
+import { dropUnestablishedChildren } from './hierarchy.ts'
 import {
   detectTemplates,
   hasBishopExchangeConstraint,
@@ -42,11 +42,6 @@ export type RecordTemplatesOptions = {
    * 走査そのものは全テンプレ独立に回して、最後に系統でふるいをかける。
    */
   readonly requireParent?: boolean
-  /**
-   * カテゴリの成立を子孫から巻き上げる (categoryRollup)。既定で効く。
-   * カテゴリを持つテンプレが無ければ何もしないので、切るのは結果を生で見たいときだけ。
-   */
-  readonly rollUpCategories?: boolean
   /**
    * game-end 評価テンプレ (居玉) を、他のテンプレが成立済みの陣営には出さない。
    * 囲い (recordCastles) の挙動。戦法は抑制しない (Dart 版と同じ)。
@@ -92,10 +87,7 @@ export function recordTemplatesWithDropped(
 }
 
 /**
- * 走査の後始末。親ゲートを先に通してから巻き上げる。
- *
- * 巻き上げるのは**ゲートを抜けた検出だけ**。落ちた成立で分類が付くと
- * 「三間飛車は落ちたのに振り飛車は付いている」という読めない結果になる。
+ * 走査の後始末。親ゲートでふるってから、同じ手数の中を並べ替える。
  */
 function sift(
   scanned: readonly DetectedTemplateAt[],
@@ -104,10 +96,9 @@ function sift(
 ): DetectedTemplateAt[] {
   const gated =
     options?.requireParent === true ? dropUnestablishedChildren(scanned, templates) : [...scanned]
-  const rolled = options?.rollUpCategories === false ? gated : categoryRollup(gated, templates)
   // 並べ替えは同じ手数の固まりの中だけ。固まりの位置は動かさないので、
   // 手数の昇順から外れている末尾の居玉も今の場所に残る。
-  return orderDetectionsWithinPly(rolled, templates)
+  return orderDetectionsWithinPly(gated, templates)
 }
 
 /** 走査本体。系統のふるいは通していないので、外に出すのは上の 2 つだけ。 */
