@@ -19,7 +19,7 @@ import {
   satisfiesPlyConstraint,
 } from './match.ts'
 import { MoveHistory } from './move-history.ts'
-import { sortByPriorityWithinPly } from './priority.ts'
+import { orderDetectionsWithinPly } from './order.ts'
 import type { DetectedTemplateAt, FormationTemplate } from './template.ts'
 
 const SIDES: readonly Color[] = [Color.BLACK, Color.WHITE]
@@ -107,7 +107,7 @@ function sift(
   const rolled = options?.rollUpCategories === false ? gated : categoryRollup(gated, templates)
   // 並べ替えは同じ手数の固まりの中だけ。固まりの位置は動かさないので、
   // 手数の昇順から外れている末尾の居玉も今の場所に残る。
-  return sortByPriorityWithinPly(rolled)
+  return orderDetectionsWithinPly(rolled, templates)
 }
 
 /** 走査本体。系統のふるいは通していないので、外に出すのは上の 2 つだけ。 */

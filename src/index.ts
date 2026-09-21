@@ -41,7 +41,12 @@ export {
   setTemplateName,
   writeHeaderLine,
 } from './header-text.ts'
-export { ancestorTemplates, categoryRollup, dropUnestablishedChildren } from './hierarchy.ts'
+export {
+  ancestorDepths,
+  ancestorTemplates,
+  categoryRollup,
+  dropUnestablishedChildren,
+} from './hierarchy.ts'
 export {
   detectTemplates,
   hasBishopExchangeConstraint,
@@ -68,7 +73,7 @@ export {
   tryParseCellToken,
 } from './parser.ts'
 export { PositionOnlyHistory, positionOnlyHistory } from './position-history.ts'
-export { priorityOf, sortByPriority, sortByPriorityWithinPly } from './priority.ts'
+export { orderDetections, orderDetectionsWithinPly, priorityOf } from './order.ts'
 export {
   type DetectedProverb,
   detectProverbsAtMove,

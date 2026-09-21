@@ -140,33 +140,28 @@ export function categoryRollup(
   }
   if (rolled.size === 0) return [...detections]
 
-  // 巻き上げた分は最後尾に積まれるので ply 順に戻す。同じ手数のときは
-  // **系統の上から** — 外側のカテゴリ、内側のカテゴリ、具体の定義の順に並べる
-  // (振り飛車と三間飛車が同じ手で成立したとき、読む側は上から降りたい)。
-  // 並べ替えは安定なので、同位の検出どうしは走査の順のまま。
-  const depths = categoryDepths(templates, index)
-  const rank = (detected: DetectedTemplateAt): number =>
-    depths.get(detected.template) ?? Number.MAX_SAFE_INTEGER
-  return [...detections, ...rolled.values()].sort((a, b) => a.ply - b.ply || rank(a) - rank(b))
+  // 巻き上げた分は最後尾に積まれるので ply 順に戻す。同じ手数の中の順は
+  // ここでは決めない (order.ts が優先度・深さ・厳しさ・名前で決める)。
+  // 並べ替えは安定なので、同じ手数の検出どうしは走査の順のまま渡る。
+  return [...detections, ...rolled.values()].sort((a, b) => a.ply - b.ply)
 }
 
 /**
- * カテゴリごとの「上から数えた代の深さ」。同じ手数で並んだときの順序にだけ使う。
+ * テンプレごとの「上から数えた代の深さ」 — 親を辿れる代の数。
  *
- * 検出からの距離ではなく**カテゴリ自身の祖先の数**で測る。距離で測ると、直の子を
- * 持つカテゴリが入れ子の内側より浅く見えて、親子が逆に並ぶことがある。
+ * 同じ手で 2 つ以上成立したときの並び順にだけ使う (order.ts)。検出からの距離では
+ * なく**そのテンプレ自身の祖先の数**で測る。カテゴリも 1 代として数えるので、
+ * 分類の下にぶら下がる具体の定義は、その分類より必ず深くなる。
+ *
+ * 親が `templates` に居なければそこで打ち切る。系統の付いていないテンプレは 0。
  */
-function categoryDepths(
+export function ancestorDepths(
   templates: readonly FormationTemplate[],
-  index: ReadonlyMap<string, FormationTemplate>,
 ): Map<FormationTemplate, number> {
+  const index = nameIndex(templates)
   const depths = new Map<FormationTemplate, number>()
   for (const template of templates) {
-    if (template.category !== true) continue
-    depths.set(
-      template,
-      ancestorChain(template, index).filter((ancestor) => ancestor.category === true).length,
-    )
+    depths.set(template, ancestorChain(template, index).length)
   }
   return depths
 }

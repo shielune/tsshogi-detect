@@ -23,8 +23,8 @@ const strategies = recordStrategies(moves)
 // => [{ template: { name: '四間飛車', ... }, side: 'black', ply: 12 }]
 ```
 
-返る配列は成立したものを全部含み、同じ手数で複数成立した組の中では優先度
-（`priority`）の降順に並ぶ。優先度を書いていないテンプレートどうしは今までどおりの順。
+返る配列は成立したものを全部含み、同じ手数で複数成立した組の中は、優先度（`priority`）、
+系統の深さ、制約の厳しさ、手数、名前の順に見て並ぶ。狭いことを言っている定義ほど前に出る。
 
 ## 手筋
 
@@ -75,7 +75,7 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 - `src/match.ts` — 1 局面 1 テンプレの照合
 - `src/hierarchy.ts` — 系統（`parent`）をたどる親ゲートとカテゴリの巻き上げ
 - `src/scan.ts` — 棋譜の走査（`recordTemplates`）
-- `src/priority.ts` — 検出結果の並び順（`priorityOf` / `sortByPriority` / `sortByPriorityWithinPly`）
+- `src/order.ts` — 検出結果の並び順（`priorityOf` / `orderDetections` / `orderDetectionsWithinPly`）
 - `src/castle.ts` — 囲いを当てて呼ぶ層。`detectCastles` / `recordCastles`
 - `src/castles.gen.ts` — 囲いテンプレート 113 件（生成物、手で編集しない）
 - `src/strategy.ts` — 戦法を当てて呼ぶ層。`detectStrategies` / `recordStrategies`
@@ -90,9 +90,18 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 同梱の 2 つ以外の母集団も、`detectTemplates` / `recordTemplates` に自分のテンプレート列を
 渡せばそのまま扱える。
 
-`priority` は成立の可否には関わらず、返す配列の順番だけを変える。大きいほど前に出て、
-省略は 0、後ろへ回したければ負の数も書ける。並べ替えるのは同じ手数の中だけで、手数は
-今までどおり主たる順序のまま。優先度が同じなら元の順（分類の深さ、定義の並び）が残る。
+並び順は成立の可否には関わらず、返す配列の順番だけを変える。同じ手で 2 つ以上成立した
+ときは、次の順に見て、差が付いたところで決まる。
+
+1. 優先度（`priority`）。大きいほど前。省略は 0 で、後ろへ回したければ負の数も書ける
+2. 系統の深さ。`parent` をたどった代の数が多いほど前
+3. 制約の厳しさ。要件の数が多いほど前
+4. 手数。若いほど前
+5. 名前。文字コードの昇順
+
+2 と 3 は「狭いことを言っている定義ほど代表にしたい」という同じ考えの二段構え。
+四間飛車と振り飛車が同じ手で成立したら、分類である振り飛車より具体の四間飛車が前に出る。
+並べ替えるのは同じ手数の中だけで、手数は今までどおり主たる順序のまま。
 
 囲いと戦法で走査の細目だけが違う。戦法は成立を指した側に限り（`moverOnly`）、親が
 成立していない子を落とす（`requireParent`）。囲いは代わりに、ちゃんとした囲いが成立して
