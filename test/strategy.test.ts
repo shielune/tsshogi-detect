@@ -85,14 +85,15 @@ describe('detectStrategies', () => {
 describe('recordStrategies', () => {
   test('初めて成立した手数を返す', () => {
     const { moves } = play(MOVES)
+    // 同じ手数で並んだときは具体の定義が先で、分類の節は後ろ (order.ts)
     expect(namesAt(recordStrategies(moves))).toEqual([
-      '振り飛車/black@5',
       '四間飛車/black@5',
-      '居飛車/black@21',
+      '振り飛車/black@5',
       '雁木戦法/black@21',
+      '居飛車/black@21',
       'ノーマル四間飛車/black@23',
-      'その他/white@28',
       '袖飛車/white@28',
+      'その他/white@28',
     ])
   })
 
@@ -109,8 +110,8 @@ describe('recordStrategies', () => {
     // 見えてしまうので、指した側に絞らないと 2 手目の先手にこれが付く
     const { moves } = play('3g3f 3c3d')
     expect(namesAt(recordStrategies(moves))).toEqual([
-      'その他/black@1',
       '初手▲3六歩戦法/black@1',
+      'その他/black@1',
     ])
     const loose = recordTemplates(KNOWN_STRATEGIES, moves, { requireParent: true })
     expect(namesAt(loose)).toContain('2手目△7四歩戦法/black@2')
