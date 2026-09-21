@@ -57,6 +57,7 @@ function facets(template: FormationTemplate): Facets {
   put('分類の節', template.category)
   put('成立手数', [template.plyEq, template.plyMin, template.plyMax])
   put('終局評価', template.evaluateAtGameEnd)
+  put('優先度', template.priority)
   put('打ちの排除', template.noDrop)
   put('角交換', template.bishopExchange)
   put('最終手', template.finishMoves)

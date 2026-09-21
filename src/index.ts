@@ -68,6 +68,7 @@ export {
   tryParseCellToken,
 } from './parser.ts'
 export { PositionOnlyHistory, positionOnlyHistory } from './position-history.ts'
+export { priorityOf, sortByPriority, sortByPriorityWithinPly } from './priority.ts'
 export {
   type DetectedProverb,
   detectProverbsAtMove,
