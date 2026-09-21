@@ -237,7 +237,7 @@ export function applyHeader(section: Section, key: string, value: string, lineNo
       )
     }
   } else if (key === 'category') {
-    // 盤の形を持たない分類の節。成立は子孫からの巻き上げでしか付かない (scan.ts)。
+    // 盤の形を持たない分類の節。系統を繋ぐだけで、検出としては出てこない。
     section.category = parseBoolHeader(value, lineNo, 'category')
   } else if (key === 'description') {
     // 人間向けコメント。意図的に無視する。
