@@ -55,6 +55,19 @@ function parsePlyHeader(
   return result
 }
 
+/**
+ * `priority: 100` / `priority: -10`。前に出したい度合いなので負の数も書ける
+ * (`isDigits` は符号を通さないので、先頭の `-` を切ってから数字を見る)。
+ */
+function parsePriorityHeader(value: string, lineNo: number): number {
+  const trimmed = value.trim()
+  const digits = trimmed.startsWith('-') ? trimmed.slice(1) : trimmed
+  if (!isDigits(digits)) {
+    throw new TemplateSyntaxError(`priority must be an integer, got "${value}"`, lineNo)
+  }
+  return Number(trimmed)
+}
+
 /** `K 5 9` 形式を (駒種, file, rank) に分解する。 */
 function parseCoordHeader(
   value: string,
@@ -124,6 +137,7 @@ export type Section = {
   plyMin: number | null
   plyMax: number | null
   evaluateAtGameEnd: boolean
+  priority: number | null
   noDrop: boolean
   bishopExchange: BishopExchange | null
   finishMoves: ParsedFinishMove[]
@@ -144,6 +158,7 @@ export function newSection(): Section {
     plyMin: null,
     plyMax: null,
     evaluateAtGameEnd: false,
+    priority: null,
     noDrop: false,
     bishopExchange: null,
     finishMoves: [],
@@ -249,6 +264,9 @@ export function applyHeader(section: Section, key: string, value: string, lineNo
   } else if (key === 'finish') {
     // 成立させた手。行を複数書いてもよい (そのどれかの手なら成立)。
     section.finishMoves.push(...parseFinishHeader(value, lineNo))
+  } else if (key === 'priority') {
+    // 同時に成立したときの並び順。成立の可否には関わらないので、カテゴリにも書ける。
+    section.priority = parsePriorityHeader(value, lineNo)
   } else if (key === 'no_drop') {
     // 打って形を揃えた成立を認めない。判定に履歴が要るので走査でしか効かない。
     section.noDrop = parseBoolHeader(value, lineNo, 'no_drop')

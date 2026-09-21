@@ -128,6 +128,28 @@ describe('headers', () => {
     expect(parseTemplateFile(`=== name: n\n\n${grid('. K . . . . . . .')}`)[0]?.noDrop).toBe(false)
   })
 
+  test('priority header', () => {
+    const of = (line: string) =>
+      parseTemplateFile(`=== name: n\n${line}\n\n${grid('. K . . . . . . .')}`)[0]?.priority
+    expect(of('priority: 100')).toBe(100)
+    // 後ろへ回すために負の数も書ける
+    expect(of('priority: -10')).toBe(-10)
+    expect(of('priority: 0')).toBe(0)
+    // 書かなければ null (= 0 と同じ扱い)
+    expect(parseTemplateFile(`=== name: n\n\n${grid('. K . . . . . . .')}`)[0]?.priority).toBe(
+      null,
+    )
+    expect(() => of('priority: 高い')).toThrow(/priority must be an integer/)
+    expect(() => of('priority: 1.5')).toThrow(/priority must be an integer/)
+  })
+
+  test('priority は分類の節にも書ける', () => {
+    // 成立の可否に関わらない並び順の指定なので、category とは両立する
+    const first = parseTemplateFile('=== name: 分類\ncategory: true\npriority: 50\n')[0]
+    expect(first?.category).toBe(true)
+    expect(first?.priority).toBe(50)
+  })
+
   test('bishop_exchange header', () => {
     const of = (line: string) =>
       parseTemplateFile(`=== name: n\n${line}\n\n${grid('. K . . . . . . .')}`)[0]?.bishopExchange

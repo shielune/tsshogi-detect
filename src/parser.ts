@@ -108,6 +108,7 @@ function finalizeSection(section: Section, endLine: number, results: ParsedTempl
     plyMin: section.plyMin,
     plyMax: section.plyMax,
     evaluateAtGameEnd: section.evaluateAtGameEnd,
+    priority: section.priority,
     noDrop: section.noDrop,
     bishopExchange: section.bishopExchange,
     finishMoves: section.finishMoves,

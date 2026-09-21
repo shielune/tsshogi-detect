@@ -173,6 +173,7 @@ function template(parsed: ParsedTemplate): string {
   if (parsed.plyMin !== null) lines.push(`    plyMin: ${parsed.plyMin},`)
   if (parsed.plyMax !== null) lines.push(`    plyMax: ${parsed.plyMax},`)
   if (parsed.evaluateAtGameEnd) lines.push('    evaluateAtGameEnd: true,')
+  if (parsed.priority !== null) lines.push(`    priority: ${parsed.priority},`)
   if (parsed.noDrop) lines.push('    noDrop: true,')
   if (parsed.bishopExchange !== null) {
     lines.push(`    bishopExchange: ${quote(parsed.bishopExchange)},`)

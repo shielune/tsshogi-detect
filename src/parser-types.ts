@@ -82,6 +82,8 @@ export type ParsedTemplate = {
   readonly plyMin: number | null
   readonly plyMax: number | null
   readonly evaluateAtGameEnd: boolean
+  /** 同じ手数で複数成立したときの並び順 (`priority:`)。null なら 0 と同じ。 */
+  readonly priority: number | null
   /** 打った駒を含む形での成立を認めない (`no_drop: true`)。 */
   readonly noDrop: boolean
   /** 角交換が済んでいることを求める (`bishop_exchange:`)。null なら問わない。 */

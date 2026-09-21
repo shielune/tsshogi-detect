@@ -10,6 +10,7 @@
 import { Color, type ImmutablePosition, type Move, type PieceType, Square } from 'tsshogi'
 import type { MoveHistory } from './move-history.ts'
 import { positionOnlyHistory } from './position-history.ts'
+import { sortByPriority } from './priority.ts'
 import { isHistoryRequirement, rotate } from './requirements.ts'
 import type { DetectedTemplate, FormationTemplate, TemplateFinishCapture } from './template.ts'
 
@@ -178,5 +179,6 @@ export function detectTemplates(
       }
     }
   }
-  return results
+  // 手数を持たない検出なので、優先度の降順は配列全体に掛かる。
+  return sortByPriority(results)
 }

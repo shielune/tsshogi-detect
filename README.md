@@ -23,6 +23,9 @@ const strategies = recordStrategies(moves)
 // => [{ template: { name: '四間飛車', ... }, side: 'black', ply: 12 }]
 ```
 
+返る配列は成立したものを全部含み、同じ手数で複数成立した組の中では優先度
+（`priority`）の降順に並ぶ。優先度を書いていないテンプレートどうしは今までどおりの順。
+
 ## 手筋
 
 手筋は直前の指し手と、その前後の局面から判定する。`KNOWN_TECHNIQUES` には 103 件を収録している。
@@ -72,6 +75,7 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 - `src/match.ts` — 1 局面 1 テンプレの照合
 - `src/hierarchy.ts` — 系統（`parent`）をたどる親ゲートとカテゴリの巻き上げ
 - `src/scan.ts` — 棋譜の走査（`recordTemplates`）
+- `src/priority.ts` — 検出結果の並び順（`priorityOf` / `sortByPriority` / `sortByPriorityWithinPly`）
 - `src/castle.ts` — 囲いを当てて呼ぶ層。`detectCastles` / `recordCastles`
 - `src/castles.gen.ts` — 囲いテンプレート 113 件（生成物、手で編集しない）
 - `src/strategy.ts` — 戦法を当てて呼ぶ層。`detectStrategies` / `recordStrategies`
@@ -81,9 +85,14 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 
 テンプレートは位置ベースのパターンに加えて、成立手数（`plyEq` / `plyMin` / `plyMax`）、
 打って揃えた形の排除（`noDrop`）、角交換の有無と仕掛けた側（`bishopExchange`）、
-成立を認める最終手（`finishMoves`）、盤の形を持たない分類の節（`category`）を指定できる。
+成立を認める最終手（`finishMoves`）、盤の形を持たない分類の節（`category`）、
+同時に成立したときの並び順（`priority`）を指定できる。
 同梱の 2 つ以外の母集団も、`detectTemplates` / `recordTemplates` に自分のテンプレート列を
 渡せばそのまま扱える。
+
+`priority` は成立の可否には関わらず、返す配列の順番だけを変える。大きいほど前に出て、
+省略は 0、後ろへ回したければ負の数も書ける。並べ替えるのは同じ手数の中だけで、手数は
+今までどおり主たる順序のまま。優先度が同じなら元の順（分類の深さ、定義の並び）が残る。
 
 囲いと戦法で走査の細目だけが違う。戦法は成立を指した側に限り（`moverOnly`）、親が
 成立していない子を落とす（`requireParent`）。囲いは代わりに、ちゃんとした囲いが成立して
