@@ -13,7 +13,7 @@ export {
   normalizeCell,
   PIECE_ORDER,
   PIECE_SFEN,
-  type TemplateCell,
+  type DefinitionCell,
   tokenFromCell,
 } from './cell-token.ts'
 export {
@@ -24,7 +24,7 @@ export {
   type GridRow,
   replaceCellToken,
   replaceCellTokens,
-  type TemplateGrid,
+  type DefinitionGrid,
 } from './grid-text.ts'
 export {
   addHeaderRequirement,
@@ -36,21 +36,21 @@ export {
   type HeaderLine,
   headerLines,
   insertHeaderLine,
-  readTemplateName,
+  readDefinitionName,
   setHeaderField,
-  setTemplateName,
+  setDefinitionName,
   writeHeaderLine,
 } from './header-text.ts'
-export { ancestorDepths, ancestorTemplates, dropUnestablishedChildren } from './hierarchy.ts'
+export { ancestorDepths, ancestorDefinitions, dropUnestablishedChildren } from './hierarchy.ts'
 export {
-  detectTemplates,
+  detectDefinitions,
   hasBishopExchangeConstraint,
   hasDropConstraint,
   hasFinishConstraint,
   hasHistoryRequirement,
   hasPlyConstraint,
   matchesFinishMove,
-  matchesTemplate,
+  matchesDefinition,
   satisfiesPlyConstraint,
   usesDroppedPiece,
 } from './match.ts'
@@ -58,13 +58,13 @@ export { MoveHistory } from './move-history.ts'
 export {
   type CellTokenParse,
   type ParsedFinishMove,
-  type ParsedTemplate,
-  parseTemplateFile,
+  type ParsedDefinition,
+  parseDefinitionFile,
   type PlacementCell,
   type PlacementKind,
   SFEN_PIECES,
   stripComments,
-  TemplateSyntaxError,
+  DefinitionSyntaxError,
   tryParseCellToken,
 } from './parser.ts'
 export { PositionOnlyHistory, positionOnlyHistory } from './position-history.ts'
@@ -92,14 +92,14 @@ export {
   PieceUnmoved,
   PieceVisited,
   rotate,
-  type TemplateRequirement,
-  type TemplateSquare,
+  type DefinitionRequirement,
+  type DefinitionSquare,
 } from './requirements.ts'
 export {
   buildMoves,
-  type RecordTemplatesOptions,
-  recordTemplates,
-  recordTemplatesWithDropped,
+  type RecordDefinitionsOptions,
+  recordDefinitions,
+  recordDefinitionsWithDropped,
 } from './scan.ts'
 export {
   type DetectedStrategy,
@@ -108,7 +108,7 @@ export {
   findStrategy,
   KNOWN_STRATEGIES,
   recordStrategies,
-  type StrategyTemplate,
+  type StrategyDefinition,
 } from './strategy.ts'
 export {
   type DetectedTechnique,
@@ -116,14 +116,14 @@ export {
   KNOWN_TECHNIQUES,
   recordTechniques,
   recordTechniquesFirstOccurrence,
-  type TechniqueTemplate,
+  type TechniqueMatcher,
 } from './technique.ts'
 export type {
   BishopExchange,
-  DetectedTemplate,
-  DetectedTemplateAt,
+  DetectedDefinition,
+  DetectedDefinitionAt,
   FormationSide,
-  FormationTemplate,
-  TemplateFinishCapture,
-  TemplateFinishMove,
-} from './template.ts'
+  FormationDefinition,
+  DefinitionFinishCapture,
+  DefinitionFinishMove,
+} from './definition.ts'

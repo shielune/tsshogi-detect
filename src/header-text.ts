@@ -81,7 +81,7 @@ function nameSpan(
 }
 
 /** `=== name:` の値。セクションが無ければ null。パースを通さないので編集の途中でも読める。 */
-export function readTemplateName(dsl: string): string | null {
+export function readDefinitionName(dsl: string): string | null {
   const lines = dsl.split('\n')
   const span = nameSpan(lines)
   return span === null ? null : (lines[span.line]?.slice(span.start, span.end) ?? null)
@@ -91,7 +91,7 @@ export function readTemplateName(dsl: string): string | null {
  * `=== name:` の値だけを差し替えた本文を返す。行末コメントもヘッダも動かない。
  * セクションが無い / 値に改行やコメント記号が混じるときは null。
  */
-export function setTemplateName(dsl: string, name: string): string | null {
+export function setDefinitionName(dsl: string, name: string): string | null {
   if (name.includes('\n') || name.includes('#') || name.includes('//')) return null
   const lines = dsl.split('\n')
   const span = nameSpan(lines)

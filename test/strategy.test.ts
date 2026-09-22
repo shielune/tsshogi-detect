@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Color, type Move, Record as ShogiRecord } from 'tsshogi'
 import { MoveHistory } from '../src/move-history.ts'
-import { recordTemplates } from '../src/scan.ts'
+import { recordDefinitions } from '../src/scan.ts'
 import {
   detectStrategies,
   findStrategy,
@@ -31,14 +31,14 @@ function play(usiMoves: string): { record: ShogiRecord; moves: Move[]; history: 
   return { record, moves, history }
 }
 
-const names = (list: readonly { template: { name: string }; side: string }[]): string[] =>
-  list.map((entry) => `${entry.template.name}/${entry.side}`)
+const names = (list: readonly { definition: { name: string }; side: string }[]): string[] =>
+  list.map((entry) => `${entry.definition.name}/${entry.side}`)
 
 const namesAt = (
-  list: readonly { template: { name: string }; side: string; ply: number }[],
-): string[] => list.map((entry) => `${entry.template.name}/${entry.side}@${entry.ply}`)
+  list: readonly { definition: { name: string }; side: string; ply: number }[],
+): string[] => list.map((entry) => `${entry.definition.name}/${entry.side}@${entry.ply}`)
 
-describe('テンプレート', () => {
+describe('定義', () => {
   test('assets/shogi/strategies.txt の全件が載っている', () => {
     expect(KNOWN_STRATEGIES.length).toBe(244)
   })
@@ -50,9 +50,9 @@ describe('テンプレート', () => {
   })
 
   test('盤の形を持たない分類の節がある', () => {
-    const categories = KNOWN_STRATEGIES.filter((template) => template.category)
-    expect(categories.map((template) => template.name)).toContain('振り飛車')
-    for (const template of categories) expect(template.placements).toEqual([])
+    const categories = KNOWN_STRATEGIES.filter((definition) => definition.category)
+    expect(categories.map((definition) => definition.name)).toContain('振り飛車')
+    for (const definition of categories) expect(definition.placements).toEqual([])
   })
 })
 
@@ -96,7 +96,7 @@ describe('recordStrategies', () => {
 
   test('分類の節は検出として出てこない', () => {
     const { moves } = play(MOVES)
-    const names = recordStrategies(moves).map((entry) => entry.template.name)
+    const names = recordStrategies(moves).map((entry) => entry.definition.name)
     // 四間飛車は出るが、その親の振り飛車 (category) は出ない
     expect(names).toContain('四間飛車')
     expect(names).not.toContain('振り飛車')
@@ -107,13 +107,13 @@ describe('recordStrategies', () => {
     // 見えてしまうので、指した側に絞らないと 2 手目の先手にこれが付く
     const { moves } = play('3g3f 3c3d')
     expect(namesAt(recordStrategies(moves))).toEqual(['初手▲3六歩戦法/black@1'])
-    const loose = recordTemplates(KNOWN_STRATEGIES, moves, { requireParent: true })
+    const loose = recordDefinitions(KNOWN_STRATEGIES, moves, { requireParent: true })
     expect(namesAt(loose)).toContain('2手目△7四歩戦法/black@2')
   })
 
   test('同じ戦法は最初の 1 回だけ報告する', () => {
     const { moves } = play(MOVES)
-    const keys = recordStrategies(moves).map((entry) => `${entry.template.name}|${entry.side}`)
+    const keys = recordStrategies(moves).map((entry) => `${entry.definition.name}|${entry.side}`)
     expect(new Set(keys).size).toBe(keys.length)
   })
 

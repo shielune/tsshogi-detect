@@ -13,7 +13,7 @@ import { SFEN_PIECES, tryParseCellToken } from './parser.ts'
 
 export type CellSide = 'own' | 'opponent'
 
-export type TemplateCell =
+export type DefinitionCell =
   | { readonly kind: 'unspecified' }
   | { readonly kind: 'empty' }
   | { readonly kind: 'anyPiece' }
@@ -47,7 +47,7 @@ export const PIECE_SFEN: ReadonlyMap<PieceType, string> = new Map(
 )
 
 /** DSL トークン 1 つをセル状態にする。解釈できなければ null。 */
-export function cellFromToken(token: string): TemplateCell | null {
+export function cellFromToken(token: string): DefinitionCell | null {
   if (token === '.') return { kind: 'unspecified' }
 
   const parsed = tryParseCellToken(token)
@@ -80,7 +80,7 @@ export function cellFromToken(token: string): TemplateCell | null {
  * 相手駒は 1 駒・非否定しか書けないので、はみ出した組み合わせを矯正する。
  * 駒を 1 つも選んでいない状態は「無指定」に落とす。
  */
-export function normalizeCell(cell: TemplateCell): TemplateCell {
+export function normalizeCell(cell: DefinitionCell): DefinitionCell {
   if (cell.kind === 'orPieces') {
     const first = cell.pieces[0]
     if (first === undefined) return { kind: 'unspecified' }
@@ -100,7 +100,7 @@ export function normalizeCell(cell: TemplateCell): TemplateCell {
 }
 
 /** セル状態を DSL トークンにする。出力は必ず cellFromToken が受理する。 */
-export function tokenFromCell(cell: TemplateCell): string {
+export function tokenFromCell(cell: DefinitionCell): string {
   const normalized = normalizeCell(cell)
   switch (normalized.kind) {
     case 'unspecified':
@@ -126,7 +126,7 @@ export function tokenFromCell(cell: TemplateCell): string {
 }
 
 /** 先手駒 ⇔ 後手駒を入れ替える。書き分けられないセルは null。 */
-export function flipCellSide(cell: TemplateCell): TemplateCell | null {
+export function flipCellSide(cell: DefinitionCell): DefinitionCell | null {
   if (cell.kind === 'orPieces') {
     if (cell.pieces.length !== 1) return null
     return { ...cell, side: cell.side === 'own' ? 'opponent' : 'own' }

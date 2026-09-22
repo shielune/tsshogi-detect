@@ -4,7 +4,7 @@
 // インデント・桁揃え・行内コメントが失われて textarea が全行 diff になる。
 // そこで該当トークンの範囲だけを差し替える。触っていないセルは 1 文字も動かない。
 //
-// 走査順は parser.ts の parseTemplateFile と同一にすること。ズレるとエディタと
+// 走査順は parser.ts の parseDefinitionFile と同一にすること。ズレるとエディタと
 // 検出エンジンで「どの行がグリッドか」の解釈が割れる。
 
 import { stripComments } from './parser.ts'
@@ -24,12 +24,12 @@ export type GridRow = {
 }
 
 /** rows はちょうど 9 行。上から 1 段目、左から 9 筋。 */
-export type TemplateGrid = {
+export type DefinitionGrid = {
   readonly rows: readonly GridRow[]
 }
 
 export type GridExtraction =
-  | { readonly ok: true; readonly grid: TemplateGrid }
+  | { readonly ok: true; readonly grid: DefinitionGrid }
   | { readonly ok: false; readonly message: string }
 
 type ScanState = {
@@ -57,7 +57,7 @@ function scanLine(state: ScanState, raw: string, lineIndex: number): ScanState {
 
   if (stripped.startsWith('===')) {
     if (state.sections >= 1) {
-      return { ...state, failure: 'テンプレが 2 件以上ある。盤面で編集できるのは 1 件のときだけ' }
+      return { ...state, failure: '定義が 2 件以上ある。盤面で編集できるのは 1 件のときだけ' }
     }
     return { ...state, sections: 1 }
   }
@@ -79,7 +79,7 @@ function scanLine(state: ScanState, raw: string, lineIndex: number): ScanState {
   return { ...state, rows: [...state.rows, { lineIndex, cells }] }
 }
 
-/** DSL 本文からグリッドを取り出す。テンプレ 1 件・9 行 x 9 セルでなければ失敗する。 */
+/** DSL 本文からグリッドを取り出す。定義 1 件・9 行 x 9 セルでなければ失敗する。 */
 export function extractGrid(dsl: string): GridExtraction {
   const state = dsl.split('\n').reduce(scanLine, INITIAL)
   if (state.failure !== null) return { ok: false, message: state.failure }
