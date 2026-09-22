@@ -107,8 +107,10 @@ export function orderDetectionsWithinPly(
   const compare = comparator(ancestorDepths(templates))
   const ordered: DetectedTemplateAt[] = []
   for (let start = 0; start < detections.length; ) {
+    // 固まりの手数は先頭で決まる。ここから同じ手数が続く間を 1 つの固まりとして見る
+    const ply = detections[start]?.ply
     let end = start + 1
-    while (end < detections.length && detections[end].ply === detections[start].ply) end += 1
+    while (end < detections.length && detections[end]?.ply === ply) end += 1
     ordered.push(...detections.slice(start, end).sort(compare))
     start = end
   }

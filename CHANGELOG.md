@@ -3,6 +3,16 @@
 版ごとの変わりどころ。テンプレートの増減と定義の変更は
 `bun run scripts/diff-templates.ts <前の版>` の出力から書き起こしている。
 
+## 0.4.1 (2026-09-22)
+
+### 直したもの
+
+- `orderDetectionsWithinPly` が、添字で取り出した要素を undefined になりうる値として
+  扱っていなかった。`noUncheckedIndexedAccess` を立てている側から使うと型検査で落ちる。
+  返す並びは変わらない。
+- この版から型検査でも `noUncheckedIndexedAccess` を立てる。使う側の設定でだけ落ちる
+  書き方が入らないようにするため。
+
 ## 0.4.0 (2026-09-21)
 
 ### 足したもの
