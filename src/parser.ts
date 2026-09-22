@@ -1,4 +1,4 @@
-// ASCII テンプレ → 中間表現パーサ (scripts/lib/shogi/template_parser.py の TS 移植)。
+// ASCII 定義 → 中間表現パーサ (scripts/lib/shogi/template_parser.py の TS 移植)。
 //
 // 囲い・戦法を定義する DSL (利用側リポジトリの castles.txt / strategies.txt などが
 // 書く書式) の本文をパースする。定義エディタがブラウザ (編集中の逐次バリデーション) と
@@ -24,24 +24,24 @@
 // セルトークンの解析 (parser-cell-token.ts) / `finish:` の解析 (parser-finish.ts) /
 // それ以外のヘッダとセクション状態 (parser-header.ts)。このファイルは行のディスパッチ
 // (セクション区切り・ヘッダ・グリッド行の見分け) と、読み終えたセクションを
-// ParsedTemplate に固める finalizeSection を持ち、公開 API はここへまとめて出す。
+// ParsedDefinition に固める finalizeSection を持ち、公開 API はここへまとめて出す。
 
 import type { PieceType } from 'tsshogi'
 import {
   cell,
   type ParsedFinishMove,
-  type ParsedTemplate,
+  type ParsedDefinition,
   type PlacementCell,
   type PlacementKind,
   SFEN_PIECES,
-  TemplateSyntaxError,
+  DefinitionSyntaxError,
 } from './parser-types.ts'
 import { parseCellToken, type CellTokenParse, tryParseCellToken } from './parser-cell-token.ts'
 import { applyHeader, checkCategorySection, newSection, parseHeaderLine, type Section } from './parser-header.ts'
-import type { TemplateSquare } from './template.ts'
+import type { DefinitionSquare } from './definition.ts'
 
-export { SFEN_PIECES, TemplateSyntaxError, tryParseCellToken }
-export type { CellTokenParse, ParsedFinishMove, ParsedTemplate, PlacementCell, PlacementKind }
+export { SFEN_PIECES, DefinitionSyntaxError, tryParseCellToken }
+export type { CellTokenParse, ParsedFinishMove, ParsedDefinition, PlacementCell, PlacementKind }
 
 /** `#` または `//` 以降を落とす。トークンにこれらの文字は出てこない。 */
 export function stripComments(line: string): string {
@@ -51,12 +51,12 @@ export function stripComments(line: string): string {
   return line.slice(0, cut)
 }
 
-function finalizeSection(section: Section, endLine: number, results: ParsedTemplate[]): void {
+function finalizeSection(section: Section, endLine: number, results: ParsedDefinition[]): void {
   if (section.name === null) return
   if (section.category) {
     checkCategorySection(section)
   } else if (section.gridRows.length !== 9) {
-    throw new TemplateSyntaxError(
+    throw new DefinitionSyntaxError(
       `section "${section.name}": expected 9 grid rows, got ${section.gridRows.length}`,
       section.startLine,
     )
@@ -66,11 +66,11 @@ function finalizeSection(section: Section, endLine: number, results: ParsedTempl
   // 走査中は「駒指定 → 升」で溜めておいて、グリッドを読み終えてから並べる
   const orGroups = new Map<
     string,
-    { kind: PlacementKind; pieces: readonly PieceType[]; squares: TemplateSquare[] }
+    { kind: PlacementKind; pieces: readonly PieceType[]; squares: DefinitionSquare[] }
   >()
   for (const [rowIdx, row] of section.gridRows.entries()) {
     if (row.cells.length !== 9) {
-      throw new TemplateSyntaxError(
+      throw new DefinitionSyntaxError(
         `section "${section.name}": expected 9 cells at row ${rowIdx + 1}, got ${row.cells.length}`,
         row.line,
       )
@@ -117,9 +117,9 @@ function finalizeSection(section: Section, endLine: number, results: ParsedTempl
   })
 }
 
-/** テンプレファイル本文をパースする。 */
-export function parseTemplateFile(content: string): ParsedTemplate[] {
-  const results: ParsedTemplate[] = []
+/** 定義ファイル本文をパースする。 */
+export function parseDefinitionFile(content: string): ParsedDefinition[] {
+  const results: ParsedDefinition[] = []
   const lines = content.split('\n')
   const state = { section: newSection() }
 
@@ -135,7 +135,7 @@ export function parseTemplateFile(content: string): ParsedTemplate[] {
       state.section = newSection()
       const { key, value } = parseHeaderLine(stripped.slice(3).trimStart(), lineNo)
       if (key !== 'name') {
-        throw new TemplateSyntaxError(`expected "=== name: <name>", got "${stripped}"`, lineNo)
+        throw new DefinitionSyntaxError(`expected "=== name: <name>", got "${stripped}"`, lineNo)
       }
       state.section.startLine = lineNo
       state.section.name = value
@@ -143,7 +143,7 @@ export function parseTemplateFile(content: string): ParsedTemplate[] {
     }
 
     if (state.section.name === null) {
-      throw new TemplateSyntaxError(`content outside of any section: "${stripped}"`, lineNo)
+      throw new DefinitionSyntaxError(`content outside of any section: "${stripped}"`, lineNo)
     }
 
     // ヘッダはグリッドより前にしか現れない。

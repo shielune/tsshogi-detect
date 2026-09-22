@@ -1,20 +1,20 @@
-// テンプレ DSL の `finish:` ヘッダ (成立を認める最終手) の解析。parser.ts の分割の一部。
+// 定義 DSL の `finish:` ヘッダ (成立を認める最終手) の解析。parser.ts の分割の一部。
 
-import { isDigits, type ParsedFinishMove, TemplateSyntaxError } from './parser-types.ts'
+import { isDigits, type ParsedFinishMove, DefinitionSyntaxError } from './parser-types.ts'
 import { tryParseCellToken } from './parser-cell-token.ts'
-import type { TemplateFinishCapture, TemplateSquare } from './template.ts'
+import type { DefinitionFinishCapture, DefinitionSquare } from './definition.ts'
 
 /** 書式の説明。移動元あり・なしの両方を出す (どちらで書いても良い)。 */
-function finishSyntaxError(value: string, lineNo: number): TemplateSyntaxError {
-  return new TemplateSyntaxError(
+function finishSyntaxError(value: string, lineNo: number): DefinitionSyntaxError {
+  return new DefinitionSyntaxError(
     `expected "finish: <file> <rank>" or "finish: <file> <rank> > <file> <rank>" (optionally " +", " 打" and " x <piece>"), got "${value}"`,
     lineNo,
   )
 }
 
 /** 打ちに書けないものを書いた行。何と混ぜられないのかまで出す。 */
-function dropSyntaxError(value: string, lineNo: number): TemplateSyntaxError {
-  return new TemplateSyntaxError(
+function dropSyntaxError(value: string, lineNo: number): DefinitionSyntaxError {
+  return new DefinitionSyntaxError(
     `"打" takes no from square, "+" or "x" (a dropped piece has no origin, cannot promote and captures nothing) in "finish: ${value}"`,
     lineNo,
   )
@@ -33,7 +33,7 @@ function dropSyntaxError(value: string, lineNo: number): TemplateSyntaxError {
  * 取られる駒は必ず相手の駒なので、先後は書き分けない — 小文字 (`x +p`) も
  * 大文字と同じ意味で受ける (升では相手駒の印だが、ここでは区別する相手が居ない)。
  */
-function parseFinishCapture(text: string, value: string, lineNo: number): TemplateFinishCapture {
+function parseFinishCapture(text: string, value: string, lineNo: number): DefinitionFinishCapture {
   const token = text.trim()
   const parsed = token === '' ? null : tryParseCellToken(token)
   if (parsed === null) throw finishSyntaxError(value, lineNo)
@@ -54,7 +54,7 @@ function parseFinishCapture(text: string, value: string, lineNo: number): Templa
 }
 
 /** `3 8` を升に。value は行全体で、エラー文に出すためだけに連れて回る。 */
-function parseFinishSquare(text: string, value: string, lineNo: number): TemplateSquare {
+function parseFinishSquare(text: string, value: string, lineNo: number): DefinitionSquare {
   const [fileToken, rankToken, ...rest] = text.split(/\s+/).filter((token) => token !== '')
   if (rest.length > 0 || !isDigits(fileToken) || !isDigits(rankToken)) {
     throw finishSyntaxError(value, lineNo)
@@ -62,7 +62,7 @@ function parseFinishSquare(text: string, value: string, lineNo: number): Templat
   const file = Number(fileToken)
   const rank = Number(rankToken)
   if (file < 1 || file > 9 || rank < 1 || rank > 9) {
-    throw new TemplateSyntaxError(`invalid coordinates in "finish: ${value}"`, lineNo)
+    throw new DefinitionSyntaxError(`invalid coordinates in "finish: ${value}"`, lineNo)
   }
   return { file, rank }
 }

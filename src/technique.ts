@@ -25,21 +25,21 @@ import {
   vectorToDirectionAndDistance,
 } from 'tsshogi'
 
-export interface TechniqueTemplate {
+export interface TechniqueMatcher {
   readonly name: string
   readonly aliases?: readonly string[]
   matches(move: Move, before: ImmutablePosition, after: ImmutablePosition): boolean
 }
 
 export interface DetectedTechnique {
-  readonly template: TechniqueTemplate
+  readonly matcher: TechniqueMatcher
   readonly ply: number
   readonly color: Color
 }
 
 type Matcher = (move: Move, before: ImmutablePosition, after: ImmutablePosition) => boolean
 
-function technique(name: string, matches: Matcher, aliases: readonly string[] = []): TechniqueTemplate {
+function technique(name: string, matches: Matcher, aliases: readonly string[] = []): TechniqueMatcher {
   return { name, aliases, matches }
 }
 
@@ -272,7 +272,7 @@ function pieceAttacksSquare(position: ImmutablePosition, origin: Square, target:
   return true
 }
 
-export const KNOWN_TECHNIQUES: readonly TechniqueTemplate[] = [
+export const KNOWN_TECHNIQUES: readonly TechniqueMatcher[] = [
   technique(
     'たたきの歩',
     (move, before) => {
@@ -863,8 +863,8 @@ export function detectTechniquesAtMove(
   move: Move,
   before: ImmutablePosition,
   after: ImmutablePosition,
-): TechniqueTemplate[] {
-  return KNOWN_TECHNIQUES.filter((template) => template.matches(move, before, after))
+): TechniqueMatcher[] {
+  return KNOWN_TECHNIQUES.filter((matcher) => matcher.matches(move, before, after))
 }
 
 /** 棋譜全体を走査し、各手で発動した手筋をすべて返す。 */
@@ -877,8 +877,8 @@ export function recordTechniques(
   for (const [index, move] of moves.entries()) {
     const before = position.clone()
     position.doMove(move, { ignoreValidation: true })
-    for (const template of detectTechniquesAtMove(move, before, position)) {
-      results.push({ template, ply: index + 1, color: move.color })
+    for (const matcher of detectTechniquesAtMove(move, before, position)) {
+      results.push({ matcher, ply: index + 1, color: move.color })
     }
   }
   return results
@@ -891,7 +891,7 @@ export function recordTechniquesFirstOccurrence(
 ): DetectedTechnique[] {
   const seen = new Set<string>()
   return recordTechniques(moves, initial).filter((hit) => {
-    const key = `${hit.template.name}|${hit.color}`
+    const key = `${hit.matcher.name}|${hit.color}`
     if (seen.has(key)) return false
     seen.add(key)
     return true

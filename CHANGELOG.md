@@ -1,7 +1,34 @@
 # 変更履歴
 
-版ごとの変わりどころ。テンプレートの増減と定義の変更は
-`bun run scripts/diff-templates.ts <前の版>` の出力から書き起こしている。
+版ごとの変わりどころ。定義の増減と中身の変更は
+`bun run scripts/diff-definitions.ts <前の版>` の出力から書き起こしている。
+
+## 0.5.0 (2026-09-22)
+
+### 変えたもの (使う側の書き直しが要る)
+
+- 囲いと戦法の「テンプレート」を「定義」と呼び直した。書き出す名前から `Template` が
+  消えて `Definition` になる。盤の形を書いた DSL の本文と、`data/` に入っている
+  囲い 113 件・戦法 244 件の中身は一字も変わっていない。読み替えは次のとおり。
+  - `FormationTemplate` は `FormationDefinition`、`StrategyTemplate` は
+    `StrategyDefinition`。
+  - `ParsedTemplate` は `ParsedDefinition`、`parseTemplateFile` は
+    `parseDefinitionFile`、`TemplateSyntaxError` は `DefinitionSyntaxError`。
+  - `TemplateSquare` `TemplateCell` `TemplateGrid` `TemplateRequirement` は
+    それぞれ `Definition` 始まりへ。`TemplateFinishCapture` と `TemplateFinishMove`
+    も同じ。
+  - `DetectedTemplate` と `DetectedTemplateAt` は `DetectedDefinition` と
+    `DetectedDefinitionAt`。**持っている項目の名前も `template` から `definition`
+    へ変わる**。
+  - `detectTemplates` `matchesTemplate` `recordTemplates`
+    `recordTemplatesWithDropped` `ancestorTemplates` `readTemplateName`
+    `setTemplateName` は、いずれも同じ規則で `Definition` 側へ。
+    `RecordTemplatesOptions` は `RecordDefinitionsOptions`。
+- 手筋の `TechniqueTemplate` は `TechniqueMatcher` にした。こちらは盤の形ではなく
+  コードで書いた判定器なので、定義とは呼ばない。`DetectedTechnique` が持つ項目も
+  `template` から `matcher` へ変わる。格言の側は元から `pattern` なので変わらない。
+- `scripts/generate-templates.ts` は `scripts/generate-definitions.ts`、
+  `scripts/diff-templates.ts` は `scripts/diff-definitions.ts` に改名した。
 
 ## 0.4.1 (2026-09-22)
 

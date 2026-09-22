@@ -8,7 +8,7 @@ import {
   removeHeaderRequirement,
   updateHeaderRequirement,
 } from '../src/header-requirement.ts'
-import { type PlacementCell, type PlacementKind, parseTemplateFile } from '../src/parser.ts'
+import { type PlacementCell, type PlacementKind, parseDefinitionFile } from '../src/parser.ts'
 
 const GRID = Array.from({ length: 9 }, () => '. . . . . . . . .').join('\n')
 
@@ -18,7 +18,7 @@ const dsl = (headers: readonly string[]) =>
 
 /** 組んだ定義の盤外の要件を、パーサが読んだ形で並べる。 */
 const extras = (text: string): readonly PlacementCell[] =>
-  (parseTemplateFile(text)[0]?.placements ?? []).filter(isHeaderRequirement)
+  (parseDefinitionFile(text)[0]?.placements ?? []).filter(isHeaderRequirement)
 
 /** 要件 1 件を「何番目の盤外の要件か」で引く。 */
 const pick = (text: string, index = 0): PlacementCell => {
@@ -41,7 +41,7 @@ const cell = (kind: PlacementKind, partial: Partial<PlacementCell> = {}): Placem
 describe('isHeaderRequirement', () => {
   test('盤の升は除き、ヘッダ由来の要件だけを拾う', () => {
     const text = dsl(['visited: B 8 8', 'hand: P'])
-    const placements = parseTemplateFile(text)[0]?.placements ?? []
+    const placements = parseDefinitionFile(text)[0]?.placements ?? []
     // 盤は全部 `.` (指定なし) なので、残るのはヘッダの 2 件だけ
     expect(placements.filter(isHeaderRequirement)).toHaveLength(2)
   })

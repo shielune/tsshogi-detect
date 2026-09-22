@@ -386,9 +386,9 @@ describe('recordTechniques', () => {
         null,
       ),
     ]
-    const all = recordTechniques(moves, position).filter((hit) => hit.template.name === 'たたきの歩')
+    const all = recordTechniques(moves, position).filter((hit) => hit.matcher.name === 'たたきの歩')
     const first = recordTechniquesFirstOccurrence(moves, position).filter(
-      (hit) => hit.template.name === 'たたきの歩',
+      (hit) => hit.matcher.name === 'たたきの歩',
     )
     expect(all).toHaveLength(2)
     expect(first).toHaveLength(1)
@@ -408,7 +408,7 @@ describe('recordTechniques', () => {
       null,
     )
     const hits = recordTechniques([move], position)
-    const tataki = hits.find((hit) => hit.template.name === 'たたきの歩')
+    const tataki = hits.find((hit) => hit.matcher.name === 'たたきの歩')
     expect(tataki?.ply).toBe(1)
     expect(tataki?.color).toBe(Color.BLACK)
   })
