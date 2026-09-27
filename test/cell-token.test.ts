@@ -70,6 +70,15 @@ describe('cellFromToken', () => {
     })
   })
 
+  test('小文字の除外は相手駒の除外になる', () => {
+    expect(cellFromToken('[!rb]')).toEqual({
+      kind: 'pieces',
+      pieces: [PieceType.ROOK, PieceType.BISHOP],
+      side: 'opponent',
+      negated: true,
+    })
+  })
+
   test('升をまたいだ OR (?X) は別の kind になる', () => {
     expect(cellFromToken('?r')).toEqual({
       kind: 'orPieces',
@@ -83,7 +92,23 @@ describe('cellFromToken', () => {
     })
   })
 
-  test.each(['', '[]', '[!]', '+', 'X', '[G', 'GS', '[GX]', '..', '?', '?_', '?*', '?[!GS]'])(
+  test.each([
+    '',
+    '[]',
+    '[!]',
+    '+',
+    'X',
+    '[G',
+    'GS',
+    '[GX]',
+    '..',
+    '?',
+    '?_',
+    '?*',
+    '?[!GS]',
+    '[gs]',
+    '[!Gs]',
+  ])(
     '解析不能なら null: %p',
     (token) => {
       expect(cellFromToken(token)).toBeNull()
@@ -122,6 +147,9 @@ describe('tokenFromCell', () => {
     '[GS]',
     '[!GS]',
     '[!R]',
+    '[!r]',
+    '[!gs]',
+    '[!+b]',
     '[SGN]',
     '?R',
     '?r',
@@ -172,15 +200,14 @@ describe('normalizeCell', () => {
     ).toEqual({ kind: 'pieces', pieces: [PieceType.GOLD], side: 'opponent', negated: false })
   })
 
-  test('相手駒の否定は書けないので否定を落とす', () => {
-    expect(
-      normalizeCell({
-        kind: 'pieces',
-        pieces: [PieceType.ROOK],
-        side: 'opponent',
-        negated: true,
-      }),
-    ).toEqual({ kind: 'pieces', pieces: [PieceType.ROOK], side: 'opponent', negated: false })
+  test('相手駒の除外は複数駒のまま残す', () => {
+    const cell: DefinitionCell = {
+      kind: 'pieces',
+      pieces: [PieceType.ROOK, PieceType.BISHOP],
+      side: 'opponent',
+      negated: true,
+    }
+    expect(normalizeCell(cell)).toEqual(cell)
   })
 
   test('駒を 1 つも選んでいなければ無指定に落ちる', () => {
@@ -233,7 +260,18 @@ describe('flipCellSide', () => {
     expect(tokenFromCell(flipped)).toBe('?r')
   })
 
-  test.each(['.', '_', '*', '[GS]', '[!GS]', '?[RB]'])(
+  test.each([
+    ['[!GS]', '[!gs]'],
+    ['[!r]', '[!R]'],
+  ])('除外は何駒でも先後を入れ替えられる: %p', (token, expected) => {
+    const cell = cellFromToken(token)
+    if (cell === null) throw new Error('unreachable')
+    const flipped = flipCellSide(cell)
+    if (flipped === null) throw new Error('unreachable')
+    expect(tokenFromCell(flipped)).toBe(expected)
+  })
+
+  test.each(['.', '_', '*', '[GS]', '?[RB]'])(
     '先後を書き分けられないセルは null: %p',
     (token) => {
       const cell = cellFromToken(token)
@@ -297,7 +335,15 @@ describe('生成物の合法性', () => {
  * グリッド由来の要件だけを比べる (ヘッダ由来の kind は除外)。
  */
 describe('全定義でパーサとの一致 (ドリフト検知)', () => {
-  const GRID_KINDS = new Set(['exact', 'opponent', 'anyOf', 'notOf', 'empty', 'anyPiece'])
+  const GRID_KINDS = new Set([
+    'exact',
+    'opponent',
+    'anyOf',
+    'notOf',
+    'opponentNotOf',
+    'empty',
+    'anyPiece',
+  ])
 
   test.each([...FILES])('%s', (file) => {
     const content = readFileSync(join(ASSETS, file), 'utf8')
@@ -327,10 +373,12 @@ describe('全定義でパーサとの一致 (ドリフト検知)', () => {
                 ? 'empty'
                 : state.kind === 'anyPiece'
                   ? 'anyPiece'
-                  : state.side === 'opponent'
-                    ? 'opponent'
-                    : state.negated
-                      ? 'notOf'
+                  : state.negated
+                    ? state.side === 'opponent'
+                      ? 'opponentNotOf'
+                      : 'notOf'
+                    : state.side === 'opponent'
+                      ? 'opponent'
                       : pieces.length > 1
                         ? 'anyOf'
                         : 'exact'

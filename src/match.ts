@@ -143,9 +143,14 @@ export function matchesDefinition(
   if (definition.bishopExchange !== undefined) {
     if (history === undefined) return false
     const initiator = history.bishopExchangeInitiator()
-    if (initiator === undefined) return false
-    if (definition.bishopExchange === 'self' && initiator !== side) return false
-    if (definition.bishopExchange === 'opponent' && initiator === side) return false
+    // `never` だけは逆向き — 交換が済んでいたら落とし、済んでいなければ通す
+    if (definition.bishopExchange === 'never') {
+      if (initiator !== undefined) return false
+    } else {
+      if (initiator === undefined) return false
+      if (definition.bishopExchange === 'self' && initiator !== side) return false
+      if (definition.bishopExchange === 'opponent' && initiator === side) return false
+    }
   }
   return true
 }

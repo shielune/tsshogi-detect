@@ -25,6 +25,8 @@ export type PlacementKind =
   | 'opponent'
   | 'anyOf'
   | 'notOf'
+  // `[!r]` (相手駒の除外)。`opponentInSquares` と同じ理由で、色を kind に載せる
+  | 'opponentNotOf'
   | 'empty'
   | 'anyPiece'
   | 'pieceAnywhere'
@@ -86,7 +88,7 @@ export type ParsedDefinition = {
   readonly priority: number | null
   /** 打った駒を含む形での成立を認めない (`no_drop: true`)。 */
   readonly noDrop: boolean
-  /** 角交換が済んでいることを求める (`bishop_exchange:`)。null なら問わない。 */
+  /** 角交換の縛り (`bishop_exchange:`)。null なら問わない。 */
   readonly bishopExchange: BishopExchange | null
   /** 成立を認める最終手 (`finish:`)。空なら制限なし。 */
   readonly finishMoves: readonly ParsedFinishMove[]

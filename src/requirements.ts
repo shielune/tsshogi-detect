@@ -104,22 +104,30 @@ export class EmptySquare implements DefinitionRequirement {
   }
 }
 
-/** 指定マスに side の除外駒種が無いことを要求する (定義 `[!GS]`)。空マスや相手駒は満たす。 */
+/**
+ * 指定マスに除外駒種が無いことを要求する (定義 `[!GS]` / 相手駒なら `[!r]`)。
+ * 空マスと、色の違う駒は満たす — `[!GS]` は相手の金も、`[!r]` は自分の飛車も通す。
+ */
 export class NotOfPieces implements DefinitionRequirement {
   readonly kind = 'notOf'
   readonly file: number
   readonly rank: number
   readonly excluded: readonly PieceType[]
+  /** 定義視点の絶対色。BLACK は定義自陣、WHITE は定義相手陣の駒を除外する。 */
+  readonly color: Color
 
-  constructor(file: number, rank: number, excluded: readonly PieceType[]) {
+  constructor(file: number, rank: number, excluded: readonly PieceType[], color: Color = Color.BLACK) {
     this.file = file
     this.rank = rank
     this.excluded = excluded
+    this.color = color
   }
 
   isSatisfiedBy(position: ImmutablePosition, side: Color): boolean {
     const piece = position.board.at(rotate(this.file, this.rank, side))
-    if (piece === null || piece.color !== side) return true
+    const expected =
+      this.color === Color.BLACK ? side : side === Color.BLACK ? Color.WHITE : Color.BLACK
+    if (piece === null || piece.color !== expected) return true
     return !this.excluded.includes(piece.type)
   }
 }

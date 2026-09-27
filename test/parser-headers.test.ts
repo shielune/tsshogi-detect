@@ -156,6 +156,8 @@ describe('headers', () => {
     expect(of('bishop_exchange: self')).toBe('self')
     expect(of('bishop_exchange: opponent')).toBe('opponent')
     expect(of('bishop_exchange: any')).toBe('any')
+    // 角交換が済んでいない局面に限る
+    expect(of('bishop_exchange: never')).toBe('never')
     // 「交換したか」だけを言いたい書き手向けに true も通す (= どちらからでも)
     expect(of('bishop_exchange: true')).toBe('any')
     // 書かなければ問わない
@@ -163,6 +165,8 @@ describe('headers', () => {
       parseDefinitionFile(`=== name: n\n\n${grid('. K . . . . . . .')}`)[0]?.bishopExchange,
     ).toBe(null)
     expect(() => of('bishop_exchange: mine')).toThrow(/bishop_exchange must be/)
+    // false は「問わない」とも「しない」とも読めるので受けない。しないなら never と書く
+    expect(() => of('bishop_exchange: false')).toThrow(/bishop_exchange must be/)
   })
 
   test('description header is ignored', () => {

@@ -57,9 +57,10 @@ export interface DefinitionFinishMove {
 
 /**
  * 角交換の要求 (`bishop_exchange:`)。仕掛けた側は**判定する陣営から見て**言う。
- * `self` = 自分から仕掛けた / `opponent` = 相手から仕掛けられた / `any` = どちらでもよい。
+ * `self` = 自分から仕掛けた / `opponent` = 相手から仕掛けられた / `any` = どちらでもよい /
+ * `never` = 角交換が済んでいない局面に限る。
  */
-export type BishopExchange = 'self' | 'opponent' | 'any'
+export type BishopExchange = 'self' | 'opponent' | 'any' | 'never'
 
 /** 定義が居飛車専用 / 振り飛車専用 / 両方かを区別するフラグ。戦法のみ意味を持つ。 */
 export type FormationSide = 'either' | 'ibisha' | 'furibisha'
@@ -100,8 +101,9 @@ export interface FormationDefinition {
    */
   readonly noDrop?: boolean
   /**
-   * 角交換が済んでいることを求める (`bishop_exchange:`)。省略すれば問わない。
-   * 誰が仕掛けたかまで縛れる (角換わりと角交換振り飛車は、仕掛けた側が違う)。
+   * 角交換を縛る (`bishop_exchange:`)。省略すれば問わない。済んでいることを求めるなら
+   * 誰が仕掛けたかまで縛れる (角換わりと角交換振り飛車は、仕掛けた側が違う)。`never` は
+   * 逆に、角交換が済んだ局面では成立させない。
    */
   readonly bishopExchange?: BishopExchange
   /**
