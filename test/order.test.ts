@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'bun:test'
 import { PieceType, type Move, Record as ShogiRecord } from 'tsshogi'
 import { detectDefinitions } from '../src/match.ts'
-import { priorityOf } from '../src/order.ts'
+import { definitionOrderTiers, priorityOf } from '../src/order.ts'
 import { PiecePlacement } from '../src/requirements.ts'
 import { recordDefinitions } from '../src/scan.ts'
 import type { FormationDefinition } from '../src/definition.ts'
@@ -136,5 +136,37 @@ describe('recordDefinitions', () => {
       '一/white@1',
       '三/black@3',
     ])
+  })
+})
+
+describe('definitionOrderTiers', () => {
+  test('優先度・深さ・厳しさ・名前の順に組が分かれる', () => {
+    const definitions = [
+      king('名前が後'),
+      king('名前が先'),
+      kingAndPawn('要件が多い'),
+      king('子', { parent: '名前が先' }),
+      king('優先', { priority: 5 }),
+      king('後回し', { priority: -1 }),
+    ]
+    expect(definitionOrderTiers(definitions)).toEqual([4, 3, 2, 1, 0, 5])
+  })
+
+  test('比較器で差が付かない定義どうしは同じ組', () => {
+    // 名前まで同じで他の段も揃っていれば差が付かない。手数の段は組に効かない
+    // (「別」は U+5225、「同」は U+540C なので別が先)
+    const definitions = [king('同じ'), king('別'), king('同じ'), king('同じ', { plyMax: 40 })]
+    expect(definitionOrderTiers(definitions)).toEqual([2, 1, 2, 0])
+    expect(definitionOrderTiers([])).toEqual([])
+  })
+
+  test('組の順に並べると recordDefinitions の同じ手の並びになる', () => {
+    const definitions = [king('一'), king('二', { priority: 10 }), kingAndPawn('三'), king('一')]
+    const tiers = definitionOrderTiers(definitions)
+    const detected = recordDefinitions(definitions, play('7g7f')).filter((entry) => entry.ply === 1)
+    const tierOf = (definition: FormationDefinition): number =>
+      tiers[definitions.indexOf(definition)] ?? -1
+    const seen = detected.map((entry) => tierOf(entry.definition))
+    expect(seen).toEqual([...seen].sort((a, b) => a - b))
   })
 })

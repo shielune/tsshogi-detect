@@ -132,3 +132,15 @@ export function ancestorDepths(
   }
   return depths
 }
+
+/**
+ * 定義ごとの親ゲートの相手 (gateParent)。無ければ undefined。WASM の走査器へ渡すためのもの。
+ *
+ * 返す配列は `definitions` と同じ並び。索引は 1 度だけ作って全定義で使い回す。
+ */
+export function gateParents(
+  definitions: readonly FormationDefinition[],
+): (FormationDefinition | undefined)[] {
+  const index = nameIndex(definitions)
+  return definitions.map((definition) => gateParent(definition, index))
+}
