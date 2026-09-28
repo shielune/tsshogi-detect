@@ -25,7 +25,7 @@ import {
 } from '../src/requirements.ts'
 
 const SOURCE = 'http://localhost:11475/api/formations/definitions'
-const CACHE = join(import.meta.dir, '.cache', 'definitions.json')
+const CACHE = join(import.meta.dirname, '.cache', 'definitions.json')
 
 type Row = { readonly kind: string; readonly name: string; readonly dsl: string }
 
@@ -118,7 +118,8 @@ function toDefinition(row: Row): FormationDefinition | null {
   }
 }
 
-async function fetchRows(): Promise<Row[]> {
+async function fetchRows(cacheOnly: boolean): Promise<Row[]> {
+  if (cacheOnly) return JSON.parse(readFileSync(CACHE, 'utf8')) as Row[]
   try {
     const response = await fetch(SOURCE)
     if (!response.ok) throw new Error(`${response.status}`)
@@ -132,8 +133,12 @@ async function fetchRows(): Promise<Row[]> {
   }
 }
 
-export async function loadBenchDefinitions(): Promise<BenchDefinitions> {
-  const rows = await fetchRows()
+/**
+ * `cacheOnly` のときはサーバに聞かず控えだけを読む (同じ回の中で定義を揃えたいとき)。
+ * 控えが無ければ投げる。
+ */
+export async function loadBenchDefinitions(cacheOnly = false): Promise<BenchDefinitions> {
+  const rows = await fetchRows(cacheOnly)
   const castles: FormationDefinition[] = []
   const strategies: FormationDefinition[] = []
   for (const row of rows) {
