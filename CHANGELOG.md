@@ -3,6 +3,21 @@
 版ごとの変わりどころ。定義の増減と中身の変更は
 `bun run scripts/diff-definitions.ts <前の版>` の出力から書き起こしている。
 
+## 未公開
+
+### 足したもの
+
+- WASM の走査器 (`tsshogi-detect/wasm`)。`loadScanner()` で組み、`compile(definitions)`
+  した上で `record` / `recordWithDropped` / `recordMany` / `recordManyWithDropped` を
+  呼ぶ。結果は `recordDefinitions` / `recordDefinitionsWithDropped` と同じで、返る
+  `definition` は渡したオブジェクトそのもの。平手から始まる USI の棋譜だけを扱い、
+  符号にできない定義は `UnsupportedDefinitionError` で断る (TS 版に戻す合図)。
+  - 走査器は `rust/` にあり、`bun run build:wasm` で `src/wasm/scanner.gen.ts` に埋める。
+  - `bun run scripts/bench-wasm.ts` で TS 版と 1 局あたりの時間を比べられる。
+- `gateParents` (`src/hierarchy.ts`) と `definitionOrderTiers` (`src/order.ts`)。
+  親ゲートの相手と、同じ手数の中での順位を、定義ごとに前もって求める。走査器へ
+  渡すためのもので、TS 版の走査の挙動は変わらない。
+
 ## 0.6.0 (2026-09-27)
 
 ### 足したもの

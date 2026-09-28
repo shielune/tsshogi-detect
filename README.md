@@ -82,6 +82,7 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 - `src/strategies.gen.ts` — 戦法定義 244 件（生成物、手で編集しない）
 - `src/technique.ts` — 手筋 103 件と、その判定。`detectTechniquesAtMove` / `recordTechniques`
 - `src/proverb.ts` — 格言パターン 13 件と、その判定。`detectProverbsAtMove` / `recordProverbs`
+- `src/wasm/` — WASM の走査器の入口（`tsshogi-detect/wasm`）。定義と棋譜の符号化と、`scanner.gen.ts`（生成物）
 
 定義は位置ベースのパターンに加えて、成立手数（`plyEq` / `plyMin` / `plyMax`）、
 打って揃えた形の排除（`noDrop`）、角交換の有無と仕掛けた側（`bishopExchange`）、
@@ -109,6 +110,27 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 囲いと戦法で走査の細目だけが違う。戦法は成立を指した側に限り（`moverOnly`）、親が
 成立していない子を落とす（`requireParent`）。囲いは代わりに、ちゃんとした囲いが成立して
 いる陣営には居玉を出さない（`suppressGameEndIfDetected`）。
+
+## WASM の走査器
+
+何万局もまとめて走査するときは `tsshogi-detect/wasm` を使う。`recordDefinitions` /
+`recordDefinitionsWithDropped` と同じ結果を、Rust で書いた走査器（`rust/`）で返す。
+返る `definition` は `compile` に渡したオブジェクトそのもの。
+
+```ts
+import { loadScanner, UnsupportedDefinitionError } from 'tsshogi-detect/wasm'
+
+const scanner = await loadScanner()
+const compiled = scanner.compile(KNOWN_STRATEGIES) // 扱えない定義なら UnsupportedDefinitionError
+const detections = compiled.recordMany(usiGames, { moverOnly: true, requireParent: true })
+compiled.release()
+```
+
+棋譜は USI の文字列の列で渡し、平手から始まるものだけを扱う（`initial` は断る）。
+`UnsupportedDefinitionError` を受けたら TS 版の `recordDefinitions` に戻せばよい。
+走査器は `bun run build:wasm` で `src/wasm/scanner.gen.ts` に埋め込む（`rust/` を変えたら
+再生成してコミットする）。TS 版との一致は `test/wasm.test.ts` が乱数の棋譜で突き合わせ、
+速さは `bun run scripts/bench-wasm.ts` で比べられる。
 
 ## データの再生成
 
