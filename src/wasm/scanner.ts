@@ -22,6 +22,7 @@ export interface ScannerExports {
   alloc(len: number): number
   dealloc(ptr: number, len: number): void
   compile(ptr: number, words: number): number
+  compile_pair(aPtr: number, aWords: number, bPtr: number, bWords: number): number
   release(handle: number): void
   scan(
     handle: number,
@@ -30,6 +31,15 @@ export interface ScannerExports {
     lensPtr: number,
     games: number,
     options: number,
+  ): number
+  scan_pair(
+    handle: number,
+    movesPtr: number,
+    movesLen: number,
+    lensPtr: number,
+    games: number,
+    aOptions: number,
+    bOptions: number,
   ): number
   out_ptr(): number
   out_len(): number
@@ -116,6 +126,27 @@ export class WasmScanner {
     )
     if (handle === 0) throw new Error('WASM scanner: compile rejected the definitions')
     return new CompiledScan(this.#exports, handle, definitions)
+  }
+
+  /**
+   * 定義の列を 2 組読み、1 つの走査器にまとめる。棋譜は 1 回指すだけで両方の答えが出るので、
+   * 囲いと戦法のように別々に走らせている 2 組を回すなら、別々の compile より速い。
+   * 組どうしは名前も親子も別々に扱う。符号にできない定義が混じっていれば
+   * UnsupportedDefinitionError を投げる。
+   */
+  compilePair(
+    first: readonly FormationDefinition[],
+    second: readonly FormationDefinition[],
+  ): CompiledPair {
+    const a = encodeDefinitions(first)
+    const b = encodeDefinitions(second)
+    const handle = withBuffer(this.#exports, bytesOf(a), (aPtr) =>
+      withBuffer(this.#exports, bytesOf(b), (bPtr) =>
+        this.#exports.compile_pair(aPtr, a.length, bPtr, b.length),
+      ),
+    )
+    if (handle === 0) throw new Error('WASM scanner: compile rejected the definitions')
+    return new CompiledPair(this.#exports, handle, first, second)
   }
 }
 
@@ -209,50 +240,146 @@ export class CompiledScan {
       ),
     )
     if (status !== 0) throw new Error(`WASM scanner: scan failed with status ${status}`)
-    const out = readOutput(exports)
-    let at = 0
-    const word = (): number => {
-      if (at >= out.length) throw new Error('WASM scanner: output ended early')
-      return out[at++] as number
+    return readResults(exports, [this.#definitions], games.length, [bits]).map(
+      (game) => game[0] as RawScanResult,
+    )
+  }
+}
+
+/**
+ * 出力域を局ごとに読む。局ごとに、合法な手の数、(最初の組の options に最後の局面があれば)
+ * 最後の局面、組ごとの検出 (と落ちた検出) の順に並んでいる。`groups` は組ごとの定義、
+ * `bits` は組ごとの options。返すのは局 x 組。
+ */
+function readResults(
+  exports: ScannerExports,
+  groups: readonly (readonly FormationDefinition[])[],
+  games: number,
+  bits: readonly number[],
+): RawScanResult[][] {
+  const out = readOutput(exports)
+  let at = 0
+  const word = (): number => {
+    if (at >= out.length) throw new Error('WASM scanner: output ended early')
+    return out[at++] as number
+  }
+  const triples = (definitions: readonly FormationDefinition[]): DetectedDefinitionAt[] => {
+    const count = word()
+    const list: DetectedDefinitionAt[] = []
+    for (let k = 0; k < count; k += 1) {
+      const index = word()
+      const side = word()
+      const ply = word()
+      const definition = definitions[index]
+      if (definition === undefined) throw new Error(`WASM scanner: unknown definition ${index}`)
+      if (side !== 0 && side !== 1) throw new Error(`WASM scanner: unknown side ${side}`)
+      list.push({ definition, side: side === 0 ? Color.BLACK : Color.WHITE, ply })
     }
-    const triples = (): DetectedDefinitionAt[] => {
-      const count = word()
-      const list: DetectedDefinitionAt[] = []
-      for (let k = 0; k < count; k += 1) {
-        const index = word()
-        const side = word()
-        const ply = word()
-        const definition = this.#definitions[index]
-        if (definition === undefined) throw new Error(`WASM scanner: unknown definition ${index}`)
-        if (side !== 0 && side !== 1) throw new Error(`WASM scanner: unknown side ${side}`)
-        list.push({ definition, side: side === 0 ? Color.BLACK : Color.WHITE, ply })
+    return list
+  }
+  const results: RawScanResult[][] = []
+  for (let game = 0; game < games; game += 1) {
+    const legalLength = word()
+    let position: ScannedPosition | undefined
+    if (((bits[0] ?? 0) & SCAN_BITS.finalPosition) !== 0) {
+      const words = Array.from({ length: POSITION_WORDS }, word)
+      position = {
+        cells: words.slice(0, 81),
+        blackHand: words.slice(81, 88),
+        whiteHand: words.slice(88, 95),
+        turn: words[95] as number,
       }
-      return list
     }
-    const results: RawScanResult[] = []
-    for (let game = 0; game < games.length; game += 1) {
-      const legalLength = word()
-      let position: ScannedPosition | undefined
-      if ((bits & SCAN_BITS.finalPosition) !== 0) {
-        const words = Array.from({ length: POSITION_WORDS }, word)
-        position = {
-          cells: words.slice(0, 81),
-          blackHand: words.slice(81, 88),
-          whiteHand: words.slice(88, 95),
-          turn: words[95] as number,
+    results.push(
+      groups.map((definitions, group) => {
+        const detections = triples(definitions)
+        const dropped =
+          ((bits[group] ?? 0) & SCAN_BITS.withDropped) !== 0 ? triples(definitions) : undefined
+        return {
+          legalLength,
+          // 最後の局面は最初の組にだけ付ける
+          ...(position === undefined || group !== 0 ? {} : { position }),
+          detections,
+          ...(dropped === undefined ? {} : { dropped }),
         }
+      }),
+    )
+  }
+  if (at !== out.length) throw new Error('WASM scanner: output has trailing words')
+  return results
+}
+
+/**
+ * 読み込み済みの定義の 2 組 (compilePair)。囲いと戦法のように、名前も親子も別々に扱う
+ * 2 組を、棋譜を 1 回指すだけで走査する。使い終えたら release() する。
+ */
+export class CompiledPair {
+  readonly #exports: ScannerExports
+  readonly #definitions: readonly [readonly FormationDefinition[], readonly FormationDefinition[]]
+  #handle: number
+
+  constructor(
+    exports: ScannerExports,
+    handle: number,
+    first: readonly FormationDefinition[],
+    second: readonly FormationDefinition[],
+  ) {
+    this.#exports = exports
+    this.#handle = handle
+    this.#definitions = [[...first], [...second]]
+  }
+
+  /**
+   * 局ごとの recordMany を 2 組ぶん。組ごとに options を変えられる (囲いは
+   * suppressGameEndIfDetected、戦法は付けない、など)。返すのは [1 組めの答え, 2 組めの答え]。
+   */
+  recordMany(
+    games: readonly (readonly string[])[],
+    firstOptions: WasmScanOptions = {},
+    secondOptions: WasmScanOptions = {},
+  ): [DetectedDefinitionAt[][], DetectedDefinitionAt[][]] {
+    if (this.#handle === 0) throw new Error('WASM scanner: this CompiledPair was released')
+    const bits = [optionBits(checked(firstOptions)), optionBits(checked(secondOptions))] as const
+    const first: DetectedDefinitionAt[][] = []
+    const second: DetectedDefinitionAt[][] = []
+    for (let start = 0; start < games.length; start += CHUNK_GAMES) {
+      const chunk = games.slice(start, start + CHUNK_GAMES)
+      for (const game of this.#scanChunk(chunk, bits)) {
+        first.push(game[0]?.detections ?? [])
+        second.push(game[1]?.detections ?? [])
       }
-      const detections = triples()
-      const dropped = (bits & SCAN_BITS.withDropped) !== 0 ? triples() : undefined
-      results.push({
-        legalLength,
-        ...(position === undefined ? {} : { position }),
-        detections,
-        ...(dropped === undefined ? {} : { dropped }),
-      })
     }
-    if (at !== out.length) throw new Error('WASM scanner: output has trailing words')
-    return results
+    return [first, second]
+  }
+
+  /** 定義の 2 組を手放す。以後この CompiledPair は使えない。 */
+  release(): void {
+    if (this.#handle === 0) return
+    this.#exports.release(this.#handle)
+    this.#handle = 0
+  }
+
+  #scanChunk(
+    games: readonly (readonly string[])[],
+    bits: readonly [number, number],
+  ): RawScanResult[][] {
+    const exports = this.#exports
+    const { moves, lengths } = encodeGames(games)
+    const status = withBuffer(exports, moves, (movesPtr) =>
+      withBuffer(exports, bytesOf(lengths), (lensPtr) =>
+        exports.scan_pair(
+          this.#handle,
+          movesPtr,
+          moves.byteLength,
+          lensPtr,
+          games.length,
+          bits[0],
+          bits[1],
+        ),
+      ),
+    )
+    if (status !== 0) throw new Error(`WASM scanner: scan failed with status ${status}`)
+    return readResults(exports, this.#definitions, games.length, bits)
   }
 }
 
