@@ -3,6 +3,15 @@
 版ごとの変わりどころ。定義の増減と中身の変更は
 `bun run scripts/diff-definitions.ts <前の版>` の出力から書き起こしている。
 
+## 0.7.1 (2026-09-29)
+
+### 直したもの
+
+- WASM の走査器を組むときの型。バイト列を `WebAssembly.instantiate` に直接渡すのを
+  やめ、`compile` してから `instantiate` する。使う側が `@cloudflare/workers-types` と
+  `bun-types` を一緒に読むと多重定義が Module を渡す形に解決され、`tsc` が
+  `src/wasm/scanner.ts` で落ちていた。実行時の挙動は変わらない。
+
 ## 0.7.0 (2026-09-29)
 
 ### 足したもの
