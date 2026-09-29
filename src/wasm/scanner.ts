@@ -264,8 +264,16 @@ function checked(options: WasmScanOptions): WasmScanOptions {
   return options
 }
 
-/** WASM のバイト列から走査器を作る。ブラウザの主スレッドでも使えるよう非同期で組む。 */
+/**
+ * WASM のバイト列から走査器を作る。ブラウザの主スレッドでも使えるよう非同期で組む。
+ *
+ * `instantiate(bytes)` の一手で済ませず compile と分けるのは型のため。使う側が
+ * `@cloudflare/workers-types` と `bun-types` を一緒に読むと `instantiate` の多重定義が
+ * 混ざり、バイト列を渡しても Module を渡した形 (戻り値が Instance) に解決されて tsc が
+ * 落ちる。Module を渡す形はどちらの型でも同じなので、こちらに寄せる。
+ */
 export async function instantiateScanner(bytes: Uint8Array<ArrayBuffer> | ArrayBuffer): Promise<WasmScanner> {
-  const { instance } = await WebAssembly.instantiate(bytes, {})
+  const module = await WebAssembly.compile(bytes)
+  const instance = await WebAssembly.instantiate(module, {})
   return new WasmScanner(instance.exports as unknown as ScannerExports)
 }
