@@ -243,51 +243,57 @@ impl Flips {
         &self.up[self.up_start[key] as usize..self.up_start[key + 1] as usize]
     }
 
-    /// `checks` は照合ごとの `(升, 置ける中身の bit)`。添字が照合の番号になる
-    fn build<'a>(checks: impl Iterator<Item = &'a [(u8, u32)]>) -> Flips {
-        let mut down: Vec<(u32, u16)> = Vec::new();
-        let mut up: Vec<(u32, u16)> = Vec::new();
-        for (id, list) in checks.enumerate() {
-            let id = u16::try_from(id).expect("照合が 65,535 件を超えた");
-            for &(sq, bits) in list {
-                let holds = |d: usize| bits & (1 << sparse(d)) != 0;
-                for old in 0..CELL_KINDS {
-                    for new in 0..CELL_KINDS {
-                        if holds(old) == holds(new) {
-                            continue;
-                        }
-                        let key = ((usize::from(sq) * CELL_KINDS + old) * CELL_KINDS + new) as u32;
-                        if holds(old) {
-                            down.push((key, id));
-                        } else {
-                            up.push((key, id));
+    /// `checks` は照合ごとの `(升, 置ける中身の bit)`。添字が照合の番号になる。
+    ///
+    /// 一時の `(番号, 照合)` の配列は作らない (数十万件になり、WASM の線形メモリは縮まないので
+    /// 一度膨らむとワーカの数だけ居座る)。同じ列挙を 2 回回し、1 回目で個数を数え、
+    /// 2 回目で詰める。
+    fn build<'a>(checks: impl Iterator<Item = &'a [(u8, u32)]> + Clone) -> Flips {
+        let buckets = 81 * CELL_KINDS * CELL_KINDS;
+        // 変わり方 (升, 前の中身, 後の中身) のうち、その照合の成り立ちが変わるものを列挙する
+        let each = |visit: &mut dyn FnMut(usize, bool, u16)| {
+            for (id, list) in checks.clone().enumerate() {
+                let id = u16::try_from(id).expect("照合が 65,535 件を超えた");
+                for &(sq, bits) in list {
+                    let holds = |d: usize| bits & (1 << sparse(d)) != 0;
+                    for old in 0..CELL_KINDS {
+                        for new in 0..CELL_KINDS {
+                            if holds(old) != holds(new) {
+                                let key = (usize::from(sq) * CELL_KINDS + old) * CELL_KINDS + new;
+                                visit(key, holds(old), id);
+                            }
                         }
                     }
                 }
             }
+        };
+        // [down, up] の順
+        let mut start = [vec![0u32; buckets + 1], vec![0u32; buckets + 1]];
+        each(&mut |key, down, _| start[usize::from(!down)][key + 1] += 1);
+        for table in &mut start {
+            for i in 0..buckets {
+                table[i + 1] += table[i];
+            }
         }
-        let buckets = 81 * CELL_KINDS * CELL_KINDS;
-        let (down_start, down) = pack(buckets, down);
-        let (up_start, up) = pack(buckets, up);
+        let mut items = [
+            vec![0u16; start[0][buckets] as usize],
+            vec![0u16; start[1][buckets] as usize],
+        ];
+        let mut next = [start[0].clone(), start[1].clone()];
+        each(&mut |key, down, id| {
+            let side = usize::from(!down);
+            items[side][next[side][key] as usize] = id;
+            next[side][key] += 1;
+        });
+        let [down_start, up_start] = start;
+        let [down, up] = items;
         Flips {
-            down_start,
-            down,
-            up_start,
-            up,
+            down_start: down_start.into(),
+            down: down.into(),
+            up_start: up_start.into(),
+            up: up.into(),
         }
     }
-}
-
-fn pack(buckets: usize, mut pairs: Vec<(u32, u16)>) -> (Box<[u32]>, Box<[u16]>) {
-    pairs.sort_unstable();
-    let mut start = vec![0u32; buckets + 1];
-    for &(bucket, _) in &pairs {
-        start[bucket as usize + 1] += 1;
-    }
-    for i in 0..buckets {
-        start[i + 1] += start[i];
-    }
-    (start.into(), pairs.into_iter().map(|(_, id)| id).collect())
 }
 
 /// 升 `sq` に `bits` のどれかが来ると成り立ちうる照合 `id` の、`by_cell_at` への登録
