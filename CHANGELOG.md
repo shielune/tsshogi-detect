@@ -3,7 +3,7 @@
 版ごとの変わりどころ。定義の増減と中身の変更は
 `bun run scripts/diff-definitions.ts <前の版>` の出力から書き起こしている。
 
-## 未公開
+## 0.7.0 (2026-09-29)
 
 ### 足したもの
 
@@ -14,6 +14,12 @@
   符号にできない定義は `UnsupportedDefinitionError` で断る (TS 版に戻す合図)。
   - 走査器は `rust/` にあり、`bun run build:wasm` で `src/wasm/scanner.gen.ts` に埋める。
   - `bun run scripts/bench-wasm.ts` で TS 版と 1 局あたりの時間を比べられる。
+  - 実際の棋譜 (1 行 1 局の USI) で測るときは `scripts/bench-wasm-kifu.ts` (bun でも
+    node でも動く) と `rust/examples/bench.rs` (WASM にしない Rust そのもの) を使う。
+    定義は `scripts/bench-definitions.ts` がアプリの dev サーバから取って控え、
+    `scripts/bench-encode-definitions.ts` が走査器の符号にして両方へ渡す。250 万局の
+    棋譜で 1 局あたり WASM 0.13 ms、Rust 0.097 ms (元の TS 版は 2 万局の標本で 4.5 ms)。
+    標本 2 万局では 3 つの結果が一致し、Rust と WASM は 250 万局の全局で一致した。
 - `gateParents` (`src/hierarchy.ts`) と `definitionOrderTiers` (`src/order.ts`)。
   親ゲートの相手と、同じ手数の中での順位を、定義ごとに前もって求める。走査器へ
   渡すためのもので、TS 版の走査の挙動は変わらない。
