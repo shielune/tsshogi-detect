@@ -363,6 +363,10 @@ function fakeExports(respond: (games: number, options: number) => number[], stat
       live.delete(ptr)
     },
     compile: (_ptr, words) => (words >= 3 ? 7 : 0),
+    compile_pair: (_aPtr, aWords, _bPtr, bWords) => (aWords >= 3 && bWords >= 3 ? 7 : 0),
+    scan_pair() {
+      throw new Error('scan_pair は偽の exports では使わない')
+    },
     release() {},
     scan(handle, movesPtr, movesLen, lensPtr, games, options) {
       expect(handle).toBe(7)

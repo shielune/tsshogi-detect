@@ -7,6 +7,10 @@
  * const compiled = scanner.compile(definitions) // 扱えない定義なら UnsupportedDefinitionError
  * const detections = compiled.recordMany(games, { moverOnly: true, requireParent: true })
  * compiled.release()
+ *
+ * // 囲いと戦法のように 2 組を別々の options で回すなら、棋譜を 1 回指すだけで済む
+ * const pair = scanner.compilePair(castles, strategies)
+ * const [castleHits, strategyHits] = pair.recordMany(games, castleOptions, strategyOptions)
  * ```
  *
  * 平手から始まる棋譜だけを扱う。返す `definition` は compile に渡したオブジェクトそのもの。
@@ -17,6 +21,7 @@ import { instantiateScanner, type WasmScanner } from './scanner.ts'
 
 export { UnsupportedDefinitionError } from './encode.ts'
 export {
+  CompiledPair,
   CompiledScan,
   WasmScanner,
   type WasmScanOptions,

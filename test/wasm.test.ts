@@ -259,6 +259,55 @@ describe.skipIf(!READY)('WASM の公開の入口', () => {
     }
   }, 60_000)
 
+  test('compilePair は囲いと戦法を別々に回したものと同じ答えを、組ごとの options で返す', () => {
+    if (scanner === undefined) throw new Error('scanner is not loaded')
+    const castleOptions = { moverOnly: true, requireParent: true, suppressGameEndIfDetected: true }
+    const strategyOptions = { moverOnly: true, requireParent: true }
+    const castles = scanner.compile(KNOWN_CASTLES)
+    const strategies = scanner.compile(KNOWN_STRATEGIES)
+    const pair = scanner.compilePair(KNOWN_CASTLES, KNOWN_STRATEGIES)
+    try {
+      const [pairCastles, pairStrategies] = pair.recordMany(games, castleOptions, strategyOptions)
+      const show = (list: readonly DetectedDefinitionAt[]) =>
+        list.map((d) => `${d.definition.name}:${d.side}:${d.ply}`)
+      const separate = (compiled: typeof castles, options: WasmScanOptions) =>
+        compiled.recordMany(games, options).map(show)
+      expect(pairCastles.map(show)).toEqual(separate(castles, castleOptions))
+      expect(pairStrategies.map(show)).toEqual(separate(strategies, strategyOptions))
+      // 返す定義は、それぞれ渡した組のオブジェクトそのもの
+      for (const detected of pairCastles.flat()) expect(KNOWN_CASTLES).toContain(detected.definition)
+      for (const detected of pairStrategies.flat())
+        expect(KNOWN_STRATEGIES).toContain(detected.definition)
+      // 2000 局を超える束も分けて回して局の順を保つ
+      const many = Array.from({ length: 2345 }, (_, k) => games[k % games.length] ?? [])
+      const [manyCastles, manyStrategies] = pair.recordMany(many, castleOptions, strategyOptions)
+      expect(manyCastles.map(show)).toEqual(castles.recordMany(many, castleOptions).map(show))
+      expect(manyStrategies.map(show)).toEqual(
+        strategies.recordMany(many, strategyOptions).map(show),
+      )
+      pair.release()
+      expect(() => pair.recordMany([])).toThrow('released')
+    } finally {
+      castles.release()
+      strategies.release()
+      pair.release()
+    }
+  }, 60_000)
+
+  test('compilePair は扱えない定義を断り、initial も断る', () => {
+    if (wasm === undefined || scanner === undefined) throw new Error('scanner is not loaded')
+    const bad: FormationDefinition = { name: '升の外', placements: [new EmptySquare(0, 5)] }
+    expect(() => scanner.compilePair([bad], KNOWN_STRATEGIES)).toThrow(wasm.UnsupportedDefinitionError)
+    expect(() => scanner.compilePair(KNOWN_CASTLES, [bad])).toThrow(wasm.UnsupportedDefinitionError)
+    const pair = scanner.compilePair([], [])
+    try {
+      expect(pair.recordMany([[], ['7g7f']])).toEqual([[[], []], [[], []]])
+      expect(() => pair.recordMany([], { initial: new Position() } as WasmScanOptions)).toThrow('initial')
+    } finally {
+      pair.release()
+    }
+  })
+
   test('定義が空でも回る', () => {
     if (scanner === undefined) throw new Error('scanner is not loaded')
     const compiled = scanner.compile([])
