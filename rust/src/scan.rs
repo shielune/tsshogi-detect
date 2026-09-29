@@ -299,24 +299,28 @@ impl Scanner {
             p.cursor += entered;
             let mut squares = p.squares;
             while squares != 0 {
-                add(index.by_square.get(squares.trailing_zeros() as usize));
+                let sq = squares.trailing_zeros() as usize;
+                // 升に来た中身を置ける照合だけ (履歴の変わる升は by_square)
+                let now = game.pos.cells[sq] as usize;
+                add(index.by_cell_at.alive(sq * 32 + now, ply));
+                add(index.by_square.alive(sq, ply));
                 squares &= squares - 1;
             }
             let mut cells = p.cells;
             while cells != 0 {
-                add(index.by_cell.get(cells.trailing_zeros() as usize));
+                add(index.by_cell.alive(cells.trailing_zeros() as usize, ply));
                 cells &= cells - 1;
             }
             let mut hand = p.hand;
             while hand != 0 {
-                add(index.by_hand.get(hand.trailing_zeros() as usize));
+                add(index.by_hand.alive(hand.trailing_zeros() as usize, ply));
                 hand &= hand - 1;
             }
             if p.bishop {
                 add(&plans.by_bishop);
             }
             if side == m.color {
-                add(index.by_finish_to.get(m.to as usize));
+                add(index.by_finish_to.alive(m.to as usize, ply));
             }
             *p = Pending {
                 cursor: p.cursor,

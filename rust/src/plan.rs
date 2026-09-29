@@ -179,6 +179,9 @@ fn shape(def: &Def, side: u8, real: bool, hirate: &[u8; 81]) -> Shape {
         }
         same
     });
+    // 全部が成り立たないと成立しないので、順序は答えに効かない。落ちやすいもの
+    // (置ける中身が少ない升) を先に見れば、たいていの照合は 1 つめで終わる
+    checks.sort_by_key(|&(sq, bits)| (bits.count_ones(), sq));
     let own = if real && def.no_drop {
         let mut own: Vec<u8> = def
             .reqs
@@ -198,18 +201,31 @@ fn shape(def: &Def, side: u8, real: bool, hirate: &[u8; 81]) -> Shape {
     }
 }
 
-/// 番号ごとの一覧を 1 本の配列に詰めたもの
+/// 升 `sq` に `bits` のどれかが来ると成り立ちうる照合 `id` の、`by_cell_at` への登録
+fn accepted_at(sq: u8, bits: u32, id: u32) -> impl Iterator<Item = (u32, u32)> {
+    (0..32u32)
+        .filter(move |&c| bits & (1 << c) != 0)
+        .map(move |c| (u32::from(sq) * 32 + c, id))
+}
+
+/// 番号ごとの一覧を 1 本の配列に詰めたもの。一覧の中は、照らしてよい最後の手数 (hi) の
+/// 大きい順に並べてあり、`alive` で手数を過ぎたものを尻尾ごと切り捨てて引ける
 #[derive(Clone, Debug, Default)]
 pub struct Csr {
     start: Box<[u32]>,
     items: Box<[u32]>,
+    /// `items` と同じ並びの、その照合の hi
+    until: Box<[u32]>,
 }
 
 impl Csr {
-    /// `(番号, 値)` の組から作る。同じ番号の同じ値は 1 つにする
-    fn build(buckets: usize, mut pairs: Vec<(u32, u32)>) -> Csr {
+    /// `(番号, 値)` の組から作る。同じ番号の同じ値は 1 つにする。`hi` は値 (照合の添字) から
+    /// 照らしてよい最後の手数を引く
+    fn build(buckets: usize, mut pairs: Vec<(u32, u32)>, hi: impl Fn(u32) -> u32) -> Csr {
         pairs.sort_unstable();
         pairs.dedup();
+        // 番号ごとに hi の大きい順へ (同じ hi は値の昇順のまま)
+        pairs.sort_by_key(|&(bucket, item)| (bucket, std::cmp::Reverse(hi(item))));
         let mut start = vec![0u32; buckets + 1];
         for &(bucket, _) in &pairs {
             start[bucket as usize + 1] += 1;
@@ -219,20 +235,27 @@ impl Csr {
         }
         Csr {
             start: start.into(),
+            until: pairs.iter().map(|&(_, item)| hi(item)).collect(),
             items: pairs.into_iter().map(|(_, item)| item).collect(),
         }
     }
 
-    pub fn get(&self, bucket: usize) -> &[u32] {
-        &self.items[self.start[bucket] as usize..self.start[bucket + 1] as usize]
+    /// 手数 `ply` でまだ照らしてよいもの (hi が ply 以上)
+    pub fn alive(&self, bucket: usize, ply: u32) -> &[u32] {
+        let range = self.start[bucket] as usize..self.start[bucket + 1] as usize;
+        let until = &self.until[range.clone()];
+        &self.items[range][..until.partition_point(|&hi| hi >= ply)]
     }
 }
 
 /// 陣営 1 つぶんの索引
 #[derive(Clone, Debug, Default)]
 pub struct SideIndex {
-    /// 升 81 → その升の中身か履歴が変わると成り立ちうる照合
+    /// 升 81 → その升の履歴 (居たことのある駒・打った駒) が変わると成り立ちうる照合
     pub by_square: Csr,
+    /// 升 81 x 中身 32 (`升 * 32 + 中身`) → その升にその中身が来ると成り立ちうる照合。
+    /// 升の要件は「置けるものの bit」なので、来た中身を置けない照合は引かない
+    pub by_cell_at: Csr,
     /// 升の中身 32 → 盤のどこかにそれを要る照合
     pub by_cell: Csr,
     /// 持駒の駒種 7 → その駒を持つことを要る照合
@@ -284,8 +307,10 @@ impl Plans {
             })
             .collect();
 
+        let hi = |id: u32| plans[id as usize].hi;
         let sides = [BLACK, WHITE].map(|side| {
             let mut squares = Vec::new();
+            let mut cells_at = Vec::new();
             let mut cells = Vec::new();
             let mut hands = Vec::new();
             let mut finish_to = Vec::new();
@@ -304,15 +329,19 @@ impl Plans {
                     continue;
                 }
                 let shape = &plan.shapes[side as usize];
-                squares.extend(shape.checks.iter().map(|&(sq, _)| (u32::from(sq), id)));
+                for &(sq, bits) in &shape.checks {
+                    cells_at.extend(accepted_at(sq, bits, id));
+                }
                 squares.extend(shape.own.iter().map(|&sq| (u32::from(sq), id)));
                 for extra in &shape.extras {
                     match *extra {
                         Extra::InSquares {
+                            accept,
                             squares: ref in_squares,
-                            ..
                         } => {
-                            squares.extend(in_squares.iter().map(|&sq| (u32::from(sq), id)));
+                            for &sq in in_squares {
+                                cells_at.extend(accepted_at(sq, accept, id));
+                            }
                         }
                         Extra::Visited { sq, .. } => squares.push((u32::from(sq), id)),
                         Extra::Anywhere { cell } => cells.push((u32::from(cell), id)),
@@ -324,10 +353,11 @@ impl Plans {
                 }
             }
             SideIndex {
-                by_square: Csr::build(81, squares),
-                by_cell: Csr::build(32, cells),
-                by_hand: Csr::build(HAND_TYPES, hands),
-                by_finish_to: Csr::build(81, finish_to),
+                by_square: Csr::build(81, squares, hi),
+                by_cell_at: Csr::build(81 * 32, cells_at, hi),
+                by_cell: Csr::build(32, cells, hi),
+                by_hand: Csr::build(HAND_TYPES, hands, hi),
+                by_finish_to: Csr::build(81, finish_to, hi),
             }
         });
 
@@ -409,12 +439,31 @@ mod tests {
             &*p2.shapes[BLACK as usize].extras,
             [Extra::Visited { .. }]
         ));
+        // 履歴を見る升は by_square、盤の形だけを見る升は来た中身で引く
+        let black_index = &plans.sides[BLACK as usize];
         assert!(
-            plans.sides[BLACK as usize]
+            black_index
                 .by_square
-                .get(square(4, 8) as usize)
+                .alive(square(4, 8) as usize, 0)
                 .contains(&1)
         );
+        let silver_at = square(4, 8) as usize * 32 + cell(BLACK, SILVER) as usize;
+        assert!(black_index.by_cell_at.alive(silver_at, 0).contains(&0));
+        // 銀でない中身が来ても引かない
+        let gold_at = square(4, 8) as usize * 32 + cell(BLACK, GOLD) as usize;
+        assert!(!black_index.by_cell_at.alive(gold_at, 0).contains(&0));
         assert_eq!(&*plans.by_lo, &[0, 1]);
+    }
+
+    #[test]
+    fn alive_cuts_the_tail_past_the_window() {
+        // 番号 3 に 3 件。hi は 5, 9, u32::MAX (並びは hi の大きい順になる)
+        let his = [0, 5, 9, u32::MAX];
+        let csr = Csr::build(4, vec![(3, 1), (3, 2), (3, 3)], |id| his[id as usize]);
+        assert_eq!(csr.alive(3, 0), &[3, 2, 1]);
+        assert_eq!(csr.alive(3, 5), &[3, 2, 1]);
+        assert_eq!(csr.alive(3, 6), &[3, 2]);
+        assert_eq!(csr.alive(3, 10), &[3]);
+        assert!(csr.alive(2, 0).is_empty());
     }
 }
