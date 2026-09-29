@@ -93,29 +93,31 @@ impl Plan {
         }
     }
 
-    /// 最終手と手数を除いた照合 (matchesDefinition と同じ)
-    pub fn holds(&self, side: u8, pos: &Position, counts: &[u16; 32], h: &History) -> bool {
+    /// 升の照合 (`checks`) を除いた、最終手と手数を除く残りの照合。升の照合は走査が
+    /// 升ごとの数え上げ (`Flips`) で見ているので、ここでは見ない (matchesDefinition と同じになる)
+    pub fn holds_beyond_checks(
+        &self,
+        side: u8,
+        pos: &Position,
+        counts: &[u16; 32],
+        h: &History,
+    ) -> bool {
         let shape = &self.shapes[side as usize];
-        shape
-            .checks
-            .iter()
-            .all(|&(sq, bits)| bits & 1 << pos.cells[sq as usize] != 0)
-            && shape.extras.iter().all(|extra| match *extra {
-                Extra::InSquares {
-                    accept,
-                    ref squares,
-                } => squares
-                    .iter()
-                    .any(|&sq| accept & 1 << pos.cells[sq as usize] != 0),
-                Extra::Anywhere { cell } => counts[cell as usize] != 0,
-                Extra::Hand { piece_type, min } => pos
-                    .hand_count(side, piece_type)
-                    .is_some_and(|n| i64::from(n) >= i64::from(min)),
-                Extra::Unmoved { sq } => h.is_unmoved(side, sq),
-                Extra::Visited { sq, piece_type } => h.has_visited(side, piece_type, sq),
-                Extra::Igyoku => h.igyoku(side),
-            })
-            && !shape.own.iter().any(|&sq| h.is_dropped(side, sq))
+        shape.extras.iter().all(|extra| match *extra {
+            Extra::InSquares {
+                accept,
+                ref squares,
+            } => squares
+                .iter()
+                .any(|&sq| accept & 1 << pos.cells[sq as usize] != 0),
+            Extra::Anywhere { cell } => counts[cell as usize] != 0,
+            Extra::Hand { piece_type, min } => pos
+                .hand_count(side, piece_type)
+                .is_some_and(|n| i64::from(n) >= i64::from(min)),
+            Extra::Unmoved { sq } => h.is_unmoved(side, sq),
+            Extra::Visited { sq, piece_type } => h.has_visited(side, piece_type, sq),
+            Extra::Igyoku => h.igyoku(side),
+        }) && !shape.own.iter().any(|&sq| h.is_dropped(side, sq))
             && self
                 .bishop
                 .is_none_or(|bishop| bishop.admits(h.bishop_exchange_initiator(), side))
@@ -201,6 +203,93 @@ fn shape(def: &Def, side: u8, real: bool, hirate: &[u8; 81]) -> Shape {
     }
 }
 
+/// 盤の升に入りうる中身の数 (空 + 先後の 14 駒種)
+pub const CELL_KINDS: usize = 29;
+
+/// 升の中身 (空は 0、先手 1..=14、後手 17..=30) を 0..29 に詰めた番号
+pub const fn dense(c: u8) -> usize {
+    if c < 16 { c as usize } else { c as usize - 2 }
+}
+
+/// `dense` の逆
+const fn sparse(d: usize) -> u8 {
+    if d < 15 { d as u8 } else { d as u8 + 2 }
+}
+
+/// 升の照合が「どの手で成り立ち・崩れるか」の表。升に置く中身が `old` から `new` に変わったとき、
+/// 照合のうち 1 つが成り立たなくなる (`down`) 照合と、成り立つようになる (`up`) 照合を、
+/// `(升 * 29 + old) * 29 + new` で引く。
+///
+/// 走査は照合ごとに「成り立っている升の数」を持ち、この表の通りに足し引きする。
+/// 数が升の照合の数に並んだとき、升の形は揃っている。
+#[derive(Clone, Debug, Default)]
+pub struct Flips {
+    down_start: Box<[u32]>,
+    down: Box<[u16]>,
+    up_start: Box<[u32]>,
+    up: Box<[u16]>,
+}
+
+impl Flips {
+    pub fn key(sq: usize, old: u8, new: u8) -> usize {
+        (sq * CELL_KINDS + dense(old)) * CELL_KINDS + dense(new)
+    }
+
+    pub fn down(&self, key: usize) -> &[u16] {
+        &self.down[self.down_start[key] as usize..self.down_start[key + 1] as usize]
+    }
+
+    pub fn up(&self, key: usize) -> &[u16] {
+        &self.up[self.up_start[key] as usize..self.up_start[key + 1] as usize]
+    }
+
+    /// `checks` は照合ごとの `(升, 置ける中身の bit)`。添字が照合の番号になる
+    fn build<'a>(checks: impl Iterator<Item = &'a [(u8, u32)]>) -> Flips {
+        let mut down: Vec<(u32, u16)> = Vec::new();
+        let mut up: Vec<(u32, u16)> = Vec::new();
+        for (id, list) in checks.enumerate() {
+            let id = u16::try_from(id).expect("照合が 65,535 件を超えた");
+            for &(sq, bits) in list {
+                let holds = |d: usize| bits & (1 << sparse(d)) != 0;
+                for old in 0..CELL_KINDS {
+                    for new in 0..CELL_KINDS {
+                        if holds(old) == holds(new) {
+                            continue;
+                        }
+                        let key = ((usize::from(sq) * CELL_KINDS + old) * CELL_KINDS + new) as u32;
+                        if holds(old) {
+                            down.push((key, id));
+                        } else {
+                            up.push((key, id));
+                        }
+                    }
+                }
+            }
+        }
+        let buckets = 81 * CELL_KINDS * CELL_KINDS;
+        let (down_start, down) = pack(buckets, down);
+        let (up_start, up) = pack(buckets, up);
+        Flips {
+            down_start,
+            down,
+            up_start,
+            up,
+        }
+    }
+}
+
+fn pack(buckets: usize, mut pairs: Vec<(u32, u16)>) -> (Box<[u32]>, Box<[u16]>) {
+    pairs.sort_unstable();
+    let mut start = vec![0u32; buckets + 1];
+    for &(bucket, _) in &pairs {
+        start[bucket as usize + 1] += 1;
+    }
+    for i in 0..buckets {
+        start[i + 1] += start[i];
+    }
+    (start.into(), pairs.into_iter().map(|(_, id)| id).collect())
+}
+
 /// 升 `sq` に `bits` のどれかが来ると成り立ちうる照合 `id` の、`by_cell_at` への登録
 fn accepted_at(sq: u8, bits: u32, id: u32) -> impl Iterator<Item = (u32, u32)> {
     (0..32u32)
@@ -253,8 +342,8 @@ impl Csr {
 pub struct SideIndex {
     /// 升 81 → その升の履歴 (居たことのある駒・打った駒) が変わると成り立ちうる照合
     pub by_square: Csr,
-    /// 升 81 x 中身 32 (`升 * 32 + 中身`) → その升にその中身が来ると成り立ちうる照合。
-    /// 升の要件は「置けるものの bit」なので、来た中身を置けない照合は引かない
+    /// 升 81 x 中身 32 (`升 * 32 + 中身`) → その升にその中身が来ると成り立ちうる、升の照合に
+    /// 載らない要件 (pieceInSquares)。来た中身を置けない照合は引かない
     pub by_cell_at: Csr,
     /// 升の中身 32 → 盤のどこかにそれを要る照合
     pub by_cell: Csr,
@@ -273,6 +362,12 @@ pub struct Plans {
     /// 角交換を要る照合 (最終手を縛るものを除く)
     pub by_bishop: Box<[u32]>,
     pub sides: [SideIndex; 2],
+    /// 陣営ごとの、升の照合が動く表 (`Flips`)
+    pub flips: [Flips; 2],
+    /// 陣営ごとの、照合ごとの升の照合の数
+    pub need: [Box<[u8]>; 2],
+    /// 陣営ごとの、平手の局面で成り立っている升の照合の数
+    pub sat0: [Box<[u8]>; 2],
     /// game-end で照らす定義の添字 (並び順)
     pub game_end: Box<[u32]>,
 }
@@ -329,9 +424,6 @@ impl Plans {
                     continue;
                 }
                 let shape = &plan.shapes[side as usize];
-                for &(sq, bits) in &shape.checks {
-                    cells_at.extend(accepted_at(sq, bits, id));
-                }
                 squares.extend(shape.own.iter().map(|&sq| (u32::from(sq), id)));
                 for extra in &shape.extras {
                     match *extra {
@@ -361,6 +453,24 @@ impl Plans {
             }
         });
 
+        let sides_checks = |side: usize| plans.iter().map(move |plan| &*plan.shapes[side].checks);
+        let flips = [0, 1].map(|side| Flips::build(sides_checks(side)));
+        let need = [0, 1].map(|side| {
+            sides_checks(side)
+                .map(|checks| checks.len() as u8)
+                .collect::<Box<[u8]>>()
+        });
+        let sat0 = [0, 1].map(|side| {
+            sides_checks(side)
+                .map(|checks| {
+                    checks
+                        .iter()
+                        .filter(|&&(sq, bits)| bits & 1 << hirate[usize::from(sq)] != 0)
+                        .count() as u8
+                })
+                .collect::<Box<[u8]>>()
+        });
+
         let game_end = catalog
             .defs
             .iter()
@@ -373,6 +483,9 @@ impl Plans {
             by_lo: by_lo.into(),
             by_bishop,
             sides,
+            flips,
+            need,
+            sat0,
             game_end,
         }
     }
@@ -439,7 +552,7 @@ mod tests {
             &*p2.shapes[BLACK as usize].extras,
             [Extra::Visited { .. }]
         ));
-        // 履歴を見る升は by_square、盤の形だけを見る升は来た中身で引く
+        // 履歴を見る升は by_square に載る
         let black_index = &plans.sides[BLACK as usize];
         assert!(
             black_index
@@ -447,11 +560,21 @@ mod tests {
                 .alive(square(4, 8) as usize, 0)
                 .contains(&1)
         );
-        let silver_at = square(4, 8) as usize * 32 + cell(BLACK, SILVER) as usize;
-        assert!(black_index.by_cell_at.alive(silver_at, 0).contains(&0));
-        // 銀でない中身が来ても引かない
-        let gold_at = square(4, 8) as usize * 32 + cell(BLACK, GOLD) as usize;
-        assert!(!black_index.by_cell_at.alive(gold_at, 0).contains(&0));
+        // 盤の形だけを見る升は、来た中身で数え上げる: 4八に銀が来れば照合 0 の数が増え、
+        // 出ていけば減る。銀でない駒が来ても動かない
+        let flips = &plans.flips[BLACK as usize];
+        let at = square(4, 8) as usize;
+        let silver = cell(BLACK, SILVER);
+        let gold = cell(BLACK, GOLD);
+        assert_eq!(flips.up(Flips::key(at, 0, silver)), &[0]);
+        assert_eq!(flips.down(Flips::key(at, silver, 0)), &[0]);
+        assert_eq!(flips.up(Flips::key(at, 0, gold)), &[] as &[u16]);
+        assert_eq!(flips.down(Flips::key(at, gold, 0)), &[] as &[u16]);
+        // 銀から金へは、どちらも置けないものではないので 0 が崩れる
+        assert_eq!(flips.down(Flips::key(at, silver, gold)), &[0]);
+        // 平手の 4八 は金で、銀の照合は満たさない。5九の玉は満たす。need は升の照合の数
+        assert_eq!(plans.need[BLACK as usize][0], 2);
+        assert_eq!(plans.sat0[BLACK as usize][0], 1);
         assert_eq!(&*plans.by_lo, &[0, 1]);
     }
 

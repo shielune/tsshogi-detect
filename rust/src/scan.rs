@@ -8,7 +8,7 @@
 use crate::board::{BLACK, HAND_TYPES, Move, NO_PIECE, Position, WHITE, unpromoted};
 use crate::defs::Catalog;
 use crate::history::{Approx, History, HistoryView};
-use crate::plan::Plans;
+use crate::plan::{Flips, Plans};
 use crate::sift::{Detection, Gate, key, order_within_ply};
 
 pub const MOVER_ONLY: u32 = 1;
@@ -51,6 +51,8 @@ struct Game {
     history: History,
     /// 升の中身ごとの、盤に居る数
     counts: [u16; 32],
+    /// 陣営ごと・照合ごとの、成り立っている升の照合の数 (plan.rs の `Flips`)
+    sat: [Vec<u8>; 2],
 }
 
 /// 照合の結果を積む作業域。表は定義を読んだときに一度だけ確保する
@@ -63,6 +65,8 @@ struct Work {
     stamp: Vec<u32>,
     generation: u32,
     candidates: Vec<u32>,
+    /// 陣営ごとの、升の照合が全部揃った照合 (陣営が照らすまで溜める)
+    entered: [Vec<u32>; 2],
     /// 局面だけで照らす段の成立 `(tier, 定義, 陣営)`
     hits1: Vec<(u32, u32, u8)>,
     /// 本物の履歴で照らす段の成立 `(定義, 陣営)`
@@ -115,6 +119,7 @@ impl Scanner {
                 stamp: vec![0; plans.plans.len()],
                 generation: 0,
                 candidates: Vec::new(),
+                entered: [Vec::new(), Vec::new()],
                 hits1: Vec::new(),
                 hits2: Vec::new(),
                 scanned: Vec::new(),
@@ -123,6 +128,7 @@ impl Scanner {
                 pos: hirate.clone(),
                 history: history0.clone(),
                 counts: counts0,
+                sat: [plans.sat0[0].to_vec(), plans.sat0[1].to_vec()],
             },
             catalog,
             plans,
@@ -208,11 +214,15 @@ impl Scanner {
                 self.emit_naive(ply, &m, mover_only);
                 continue;
             }
+            if !m.is_drop() {
+                self.flip(m.from as usize, old_from);
+            }
+            self.flip(m.to as usize, old_to);
             let mut squares = 1u128 << m.to;
             if !m.is_drop() {
                 squares |= 1u128 << m.from;
             }
-            let appeared = 1u32 << cells[m.to as usize];
+            let appeared = 1u32 << self.game.pos.cells[m.to as usize];
             let exchanged =
                 initiator.is_none() && self.game.history.bishop_exchange_initiator().is_some();
             for p in &mut pending {
@@ -245,6 +255,35 @@ impl Scanner {
         self.game.pos.clone_from(&self.hirate);
         self.game.history.clone_from(&self.history0);
         self.game.counts = self.counts0;
+        for side in 0..2 {
+            self.game.sat[side].copy_from_slice(&self.plans.sat0[side]);
+            self.work.entered[side].clear();
+        }
+    }
+
+    /// 升 `sq` の中身が `old` から今の中身に変わったことを、升の照合の数え上げへ写す。
+    /// 数が升の照合の数に並んだ照合は、その陣営が次に照らすときの候補にする
+    fn flip(&mut self, sq: usize, old: u8) {
+        let new = self.game.pos.cells[sq];
+        if old == new {
+            return;
+        }
+        let key = Flips::key(sq, old, new);
+        for side in 0..2 {
+            let flips = &self.plans.flips[side];
+            let need = &self.plans.need[side];
+            let sat = &mut self.game.sat[side];
+            for &id in flips.down(key) {
+                sat[usize::from(id)] -= 1;
+            }
+            for &id in flips.up(key) {
+                let count = &mut sat[usize::from(id)];
+                *count += 1;
+                if *count == need[usize::from(id)] {
+                    self.work.entered[side].push(u32::from(id));
+                }
+            }
+        }
     }
 
     /// emitAt を差分で回したもの
@@ -316,6 +355,8 @@ impl Scanner {
                 add(index.by_hand.alive(hand.trailing_zeros() as usize, ply));
                 hand &= hand - 1;
             }
+            add(&work.entered[side as usize]);
+            work.entered[side as usize].clear();
             if p.bishop {
                 add(&plans.by_bishop);
             }
@@ -338,7 +379,18 @@ impl Scanner {
                 if plan.finish && !catalog.defs[plan.def as usize].finish_matches(side, m) {
                     continue;
                 }
-                if !plan.holds(side, &game.pos, &game.counts, &game.history) {
+                // 升の照合は数え上げで済んでいる
+                if game.sat[side as usize][id as usize] != plans.need[side as usize][id as usize] {
+                    continue;
+                }
+                debug_assert!(
+                    plan.shapes[side as usize]
+                        .checks
+                        .iter()
+                        .all(|&(sq, bits)| bits & 1 << game.pos.cells[sq as usize] != 0),
+                    "数え上げが盤と合わない"
+                );
+                if !plan.holds_beyond_checks(side, &game.pos, &game.counts, &game.history) {
                     continue;
                 }
                 if plan.real {
