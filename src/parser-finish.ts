@@ -34,7 +34,8 @@ function dropSyntaxError(value: string, lineNo: number): DefinitionSyntaxError {
  * 大文字と同じ意味で受ける (升では相手駒の印だが、ここでは区別する相手が居ない)。
  */
 function parseFinishCapture(text: string, value: string, lineNo: number): DefinitionFinishCapture {
-  const token = text.trim()
+  // 升のトークンは括弧の中の大文字小文字を揃えさせる (`[Br]` は弾く) ので、先に大文字へ寄せる
+  const token = text.trim().toUpperCase()
   const parsed = token === '' ? null : tryParseCellToken(token)
   if (parsed === null) throw finishSyntaxError(value, lineNo)
   switch (parsed.kind) {
@@ -44,7 +45,6 @@ function parseFinishCapture(text: string, value: string, lineNo: number): Defini
       return { kind: 'none' }
     case 'exact':
     case 'anyOf':
-    case 'opponent':
       return { kind: 'pieces', pieces: parsed.pieceTypes, negated: false }
     case 'notOf':
       return { kind: 'pieces', pieces: parsed.pieceTypes, negated: true }

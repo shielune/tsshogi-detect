@@ -120,6 +120,8 @@ function requirement(cell: PlacementCell): string {
       return `new AnyOfPieces(${cell.file}, ${cell.rank}, ${pieces(cell.pieceTypes)})`
     case 'notOf':
       return `new NotOfPieces(${cell.file}, ${cell.rank}, ${pieces(cell.pieceTypes)})`
+    case 'opponentNotOf':
+      return `new NotOfPieces(${cell.file}, ${cell.rank}, ${pieces(cell.pieceTypes)}, Color.WHITE)`
     case 'empty':
       return `new EmptySquare(${cell.file}, ${cell.rank})`
     case 'anyPiece':

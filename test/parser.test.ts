@@ -193,6 +193,22 @@ ${grid('. K . . . . . . .')}
     expect(cell.pieceTypes).toEqual([PieceType.PROM_PAWN, PieceType.PROM_LANCE])
   })
 
+  test('lowercase negated alternation excludes opponent pieces', () => {
+    const text = `=== name: negOpp\n${grid(
+      EMPTY_ROW,
+      '. [!rb] . . . . . . .',
+      EMPTY_ROW,
+      EMPTY_ROW,
+      EMPTY_ROW,
+      EMPTY_ROW,
+      EMPTY_ROW,
+      '. K . . . . . . .',
+    )}`
+    const cell = firstOfKind(one(text), 'opponentNotOf')
+    expect(cell.pieceTypes).toEqual([PieceType.ROOK, PieceType.BISHOP])
+    expect([cell.file, cell.rank]).toEqual([8, 2])
+  })
+
   test('lowercase token is opponent piece', () => {
     const text = `=== name: opp\n${grid(
       '. . . . k . . . .',
@@ -288,6 +304,20 @@ describe('errors', () => {
       EMPTY_ROW,
       EMPTY_ROW,
       '. X . . . . . . .',
+    )}`
+    expect(() => parseDefinitionFile(text)).toThrow()
+  })
+
+  test.each(['[gs]', '[!Gs]', '[Gs]'])('throws on opponent pieces outside exclusion: %p', (token) => {
+    const text = `=== name: bad\n${grid(
+      EMPTY_ROW,
+      EMPTY_ROW,
+      EMPTY_ROW,
+      EMPTY_ROW,
+      `. . . . ${token} . . . .`,
+      EMPTY_ROW,
+      EMPTY_ROW,
+      '. K . . . . . . .',
     )}`
     expect(() => parseDefinitionFile(text)).toThrow()
   })

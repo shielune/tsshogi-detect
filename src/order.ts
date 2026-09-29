@@ -19,6 +19,7 @@
  * 決まる。
  */
 
+import { Color } from 'tsshogi'
 import { ancestorDepths } from './hierarchy.ts'
 import type { DetectedDefinition, DetectedDefinitionAt, FormationDefinition } from './definition.ts'
 
@@ -115,4 +116,30 @@ export function orderDetectionsWithinPly(
     start = end
   }
   return ordered
+}
+
+/**
+ * 定義ごとの「同じ手数の固まりの中での順位の組」。WASM の走査器 (src/wasm/) へ渡すためのもの。
+ *
+ * 固まりの中では手数が全員同じなので、比較器の手数の段は効かない。残る段 (優先度・深さ・
+ * 厳しさ・名前) で定義を安定に並べ、隣どうしで差が付いたところで組の番号を 1 つ進める。
+ * 同じ組の定義どうしは比較器が 0 を返す相手なので、並べ替えのあとも積まれた順のまま残る。
+ *
+ * 返す配列は `definitions` と同じ並びで、組の番号は小さいほど前。
+ */
+export function definitionOrderTiers(definitions: readonly FormationDefinition[]): number[] {
+  const compare = comparator(ancestorDepths(definitions))
+  // 陣営は比較器が見ないので何でもよい。手数を持たない検出として比べる
+  const probes = definitions.map((definition): DetectedDefinition => ({ definition, side: Color.BLACK }))
+  const probe = (index: number): DetectedDefinition => probes[index] as DetectedDefinition
+  const sorted = probes.map((_, index) => index).sort((a, b) => compare(probe(a), probe(b)))
+  const tiers = new Array<number>(definitions.length).fill(0)
+  let tier = -1
+  let previous: number | undefined
+  for (const index of sorted) {
+    if (previous === undefined || compare(probe(previous), probe(index)) !== 0) tier += 1
+    tiers[index] = tier
+    previous = index
+  }
+  return tiers
 }

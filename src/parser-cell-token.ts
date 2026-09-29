@@ -1,4 +1,4 @@
-// 定義 DSL のセルトークン (`.` `_` `*` `K` `+P` `[GS]` `[!GS]` `?r` …) 1 つ分の
+// 定義 DSL のセルトークン (`.` `_` `*` `K` `+P` `[GS]` `[!GS]` `[!r]` `?r` …) 1 つ分の
 // 解析。parser.ts の分割の一部で、盤面グリッドの 1 マスをどう読むかだけを持つ。
 
 import type { PieceType } from 'tsshogi'
@@ -114,14 +114,31 @@ function parseCellToken(
         lineNo,
       )
     }
-    const pieces = tokenizeAlternation(body, lineNo).map((t) => pieceTypeOf(t, lineNo))
+    const tokens = tokenizeAlternation(body, lineNo)
+    const pieces = tokens.map((t) => pieceTypeOf(t, lineNo))
     if (pieces.length === 0) {
       throw new DefinitionSyntaxError(
         `section "${section}" row ${row}: empty alternation in "${token}"`,
         lineNo,
       )
     }
-    return { kind: negated ? 'notOf' : 'anyOf', pieceTypes: pieces }
+    // 括弧 1 つが言う色は 1 つ。小文字 (相手駒) を書けるのは除外 `[!r]` だけで、
+    // 並べる側 `[gs]` は書けない — 相手駒のどれか、は升 1 つでは言う場面が無い
+    const opponent = tokens.map(isLowercasePieceToken)
+    if (opponent.some((lower) => lower !== opponent[0])) {
+      throw new DefinitionSyntaxError(
+        `section "${section}" row ${row}: "${token}" mixes own (uppercase) and opponent (lowercase) pieces`,
+        lineNo,
+      )
+    }
+    if (opponent[0] === true && !negated) {
+      throw new DefinitionSyntaxError(
+        `section "${section}" row ${row}: opponent pieces in "[]" are only for exclusion (e.g. "[!${body}]")`,
+        lineNo,
+      )
+    }
+    if (negated) return { kind: opponent[0] === true ? 'opponentNotOf' : 'notOf', pieceTypes: pieces }
+    return { kind: 'anyOf', pieceTypes: pieces }
   }
   if (isLowercasePieceToken(token)) {
     // 小文字トークンは相手駒 (bioshogi の `v駒` 相当)。

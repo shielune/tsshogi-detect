@@ -100,6 +100,19 @@ describe('headers', () => {
       pieces: [PieceType.BISHOP, PieceType.ROOK],
       negated: true,
     })
+    // 取った駒に色は無いので、升では書けない小文字の並びや混ぜ書きも同じ意味で通す
+    for (const value of ['2 8 x [br]', '2 8 x [Br]']) {
+      expect(parse(value)?.[0]?.capture).toEqual({
+        kind: 'pieces',
+        pieces: [PieceType.BISHOP, PieceType.ROOK],
+        negated: false,
+      })
+    }
+    expect(parse('2 8 x [!br]')?.[0]?.capture).toEqual({
+      kind: 'pieces',
+      pieces: [PieceType.BISHOP, PieceType.ROOK],
+      negated: true,
+    })
     // 駒になっていない / 空の並び / `x` が 2 つ以上はどれも拒否する
     for (const value of ['2 8 x', '2 8 x Z', '2 8 x [', '2 8 x []', '2 8 x [!]', '2 8 x P x P']) {
       expect(() => parse(value)).toThrow()

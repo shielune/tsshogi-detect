@@ -108,17 +108,20 @@ function parseBoolHeader(value: string, lineNo: number, key: string): boolean {
 }
 
 /**
- * `bishop_exchange: self|opponent|any`。仕掛けた側は**判定する陣営から見て**言う。
+ * `bishop_exchange: self|opponent|any|never`。仕掛けた側は**判定する陣営から見て**言う。
  *
  * `true` も `any` として通す — 「角交換したか」だけを言いたい書き手が真っ先に書く形で、
- * 他の真偽ヘッダと綴りが揃うので、弾く理由が無い。
+ * 他の真偽ヘッダと綴りが揃うので、弾く理由が無い。`false` は通さない — 「問わない」とも
+ * 「交換していない」とも読めるので、後者は `never` と書かせる。
  */
 function parseBishopExchangeHeader(value: string, lineNo: number): BishopExchange {
   const trimmed = value.trim()
-  if (trimmed === 'self' || trimmed === 'opponent' || trimmed === 'any') return trimmed
+  if (trimmed === 'self' || trimmed === 'opponent' || trimmed === 'any' || trimmed === 'never') {
+    return trimmed
+  }
   if (trimmed === 'true') return 'any'
   throw new DefinitionSyntaxError(
-    `bishop_exchange must be "self", "opponent" or "any", got "${value}"`,
+    `bishop_exchange must be "self", "opponent", "any" or "never", got "${value}"`,
     lineNo,
   )
 }
