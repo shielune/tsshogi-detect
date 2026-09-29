@@ -27,21 +27,32 @@ pub const BAD_OPTIONS: u32 = 3;
 /// 指し手 1 つの符号の長さ
 pub const MOVE_BYTES: usize = 5;
 
-/// 読み込んだ定義と、走査の作業域
+/// 読み込んだ定義と、走査の作業域。定義の集まり (`Member`) は 1 つ以上で、
+/// 盤と履歴は全部で共有する — 同じ棋譜を何度も指し直さず、1 回の走査で答えを揃える
 #[derive(Clone, Debug)]
 pub struct Scanner {
-    catalog: Catalog,
-    plans: Plans,
     hirate: Position,
     history0: History,
     counts0: [u16; 32],
+    game: Game,
+    members: Vec<Member>,
+    /// 定義の集まりごとの、陣営ごとの「照らしていない間に変わったもの」
+    pending: Vec<[Pending; 2]>,
+}
+
+/// 定義の集まり 1 つぶんの状態。棋譜を指す部分は持たない
+#[derive(Clone, Debug)]
+struct Member {
+    catalog: Catalog,
+    plans: Plans,
     /// 親を持つ定義があるか (無ければ親ゲートは素通り)
     gated: bool,
-    game: Game,
     work: Work,
     gate: Gate,
     kept: Vec<Detection>,
     dropped: Vec<Detection>,
+    /// 陣営ごと・照合ごとの、成り立っている升の照合の数 (plan.rs の `Flips`)
+    sat: [Vec<u8>; 2],
 }
 
 /// 1 局ぶんの盤と履歴
@@ -51,8 +62,17 @@ struct Game {
     history: History,
     /// 升の中身ごとの、盤に居る数
     counts: [u16; 32],
-    /// 陣営ごと・照合ごとの、成り立っている升の照合の数 (plan.rs の `Flips`)
-    sat: [Vec<u8>; 2],
+}
+
+/// 1 手の指し方と、指す前に分かっていたこと。定義の集まりへ配る
+struct Step {
+    ply: u32,
+    m: Move,
+    /// 移動元の升の、指す前の中身 (打つ手は 0)
+    old_from: u8,
+    old_to: u8,
+    /// この手で角交換を仕掛けた側が決まった
+    exchanged: bool,
 }
 
 /// 照合の結果を積む作業域。表は定義を読んだときに一度だけ確保する
@@ -100,17 +120,11 @@ impl Work {
     }
 }
 
-impl Scanner {
-    pub fn new(catalog: Catalog) -> Scanner {
-        let hirate = Position::hirate();
+impl Member {
+    fn new(catalog: Catalog, hirate: &Position) -> Member {
         let plans = Plans::build(&catalog, &hirate.cells);
-        let history0 = History::from_cells(&hirate.cells);
-        let mut counts0 = [0u16; 32];
-        for &c in &hirate.cells {
-            counts0[c as usize] += 1;
-        }
         let keys = catalog.names as usize * 2;
-        Scanner {
+        Member {
             gated: catalog.defs.iter().any(|def| def.gate_parent.is_some()),
             gate: Gate::new(catalog.names),
             work: Work {
@@ -124,125 +138,17 @@ impl Scanner {
                 hits2: Vec::new(),
                 scanned: Vec::new(),
             },
-            game: Game {
-                pos: hirate.clone(),
-                history: history0.clone(),
-                counts: counts0,
-                sat: [plans.sat0[0].to_vec(), plans.sat0[1].to_vec()],
-            },
+            sat: [plans.sat0[0].to_vec(), plans.sat0[1].to_vec()],
             catalog,
             plans,
-            hirate,
-            history0,
-            counts0,
             kept: Vec::new(),
             dropped: Vec::new(),
         }
     }
 
-    pub fn catalog(&self) -> &Catalog {
-        &self.catalog
-    }
-
-    /// 棋譜をまとめて走査し、lib.rs の「出力」の形で `out` に積む。
-    /// `moves` は指し手 5 バイトの列、`lens` は局ごとの指し手の数。
-    /// 入力が壊れていれば何も積まずに BAD_GAMES / BAD_OPTIONS を返す
-    pub fn scan(
-        &mut self,
-        moves: &[u8],
-        lens: &[u32],
-        options: u32,
-        out: &mut Vec<i32>,
-    ) -> Result<(), u32> {
-        let total = lens
-            .iter()
-            .try_fold(0usize, |sum, &n| sum.checked_add(n as usize));
-        if total.and_then(|n| n.checked_mul(MOVE_BYTES)) != Some(moves.len()) {
-            return Err(BAD_GAMES);
-        }
-        if options & !KNOWN_OPTIONS != 0 {
-            return Err(BAD_OPTIONS);
-        }
-        let mut rest = moves;
-        for &n in lens {
-            let (game, tail) = rest.split_at(n as usize * MOVE_BYTES);
-            rest = tail;
-            self.scan_game(game, options, out);
-        }
-        Ok(())
-    }
-
-    fn scan_game(&mut self, usis: &[u8], options: u32, out: &mut Vec<i32>) {
-        self.reset();
-        let mover_only = options & MOVER_ONLY != 0;
-        let naive = options & NAIVE != 0;
-        let mut pending = [Pending::default(); 2];
-        let mut legal = 0u32;
-        for usi in usis.as_chunks::<MOVE_BYTES>().0 {
-            let Some(m) = self.game.pos.move_from_usi(usi) else {
-                break;
-            };
-            if !self.game.pos.is_valid_move(&m) {
-                break;
-            }
-            legal += 1;
-            let ply = legal;
-            let initiator = self.game.history.bishop_exchange_initiator();
-            let old_from = if m.is_drop() {
-                0
-            } else {
-                self.game.pos.cells[m.from as usize]
-            };
-            let old_to = self.game.pos.cells[m.to as usize];
-            // 履歴は doMove の前に記録する (scan.ts と同じ)
-            self.game.history.record_move(&m, ply);
-            self.game.pos.do_move(&m);
-            let counts = &mut self.game.counts;
-            let cells = &self.game.pos.cells;
-            if !m.is_drop() {
-                counts[old_from as usize] -= 1;
-                counts[cells[m.from as usize] as usize] += 1;
-            }
-            counts[old_to as usize] -= 1;
-            counts[cells[m.to as usize] as usize] += 1;
-
-            // 出せる鍵を出し尽くしたら、あとは合法手を数えて盤を進めるだけ
-            if self.work.seen_count == self.work.seen.len() {
-                continue;
-            }
-            if naive {
-                self.emit_naive(ply, &m, mover_only);
-                continue;
-            }
-            if !m.is_drop() {
-                self.flip(m.from as usize, old_from);
-            }
-            self.flip(m.to as usize, old_to);
-            let mut squares = 1u128 << m.to;
-            if !m.is_drop() {
-                squares |= 1u128 << m.from;
-            }
-            let appeared = 1u32 << self.game.pos.cells[m.to as usize];
-            let exchanged =
-                initiator.is_none() && self.game.history.bishop_exchange_initiator().is_some();
-            for p in &mut pending {
-                p.squares |= squares;
-                p.cells |= appeared;
-                p.bishop |= exchanged;
-            }
-            if m.captured != NO_PIECE {
-                let basic = unpromoted(m.captured);
-                if (basic as usize) < HAND_TYPES {
-                    pending[m.color as usize].hand |= 1 << basic;
-                }
-            }
-            self.emit_incremental(ply, &m, mover_only, &mut pending);
-        }
-        if legal > 0 {
-            self.game_end(legal, options & SUPPRESS_GAME_END != 0);
-        }
-        self.sift(options & REQUIRE_PARENT != 0);
-        self.write(legal, options, out);
+    /// 出せる鍵を出し尽くした (あとは棋譜を指すだけ)
+    fn finished(&self) -> bool {
+        self.work.seen_count == self.work.seen.len()
     }
 
     /// 局を始める前に作業域を戻す
@@ -252,19 +158,60 @@ impl Scanner {
         }
         self.work.scanned.clear();
         self.work.seen_count = 0;
-        self.game.pos.clone_from(&self.hirate);
-        self.game.history.clone_from(&self.history0);
-        self.game.counts = self.counts0;
         for side in 0..2 {
-            self.game.sat[side].copy_from_slice(&self.plans.sat0[side]);
+            self.sat[side].copy_from_slice(&self.plans.sat0[side]);
             self.work.entered[side].clear();
         }
     }
 
+    /// 1 手ぶんを差分で照らす (`options` の NAIVE ならそのまま写した回し方で)
+    fn step(
+        &mut self,
+        game: &Game,
+        hirate: &Position,
+        step: &Step,
+        options: u32,
+        pending: &mut [Pending; 2],
+    ) {
+        let Step {
+            ply,
+            ref m,
+            old_from,
+            old_to,
+            exchanged,
+        } = *step;
+        let mover_only = options & MOVER_ONLY != 0;
+        if options & NAIVE != 0 {
+            self.emit_naive(game, hirate, ply, m, mover_only);
+            return;
+        }
+        if !m.is_drop() {
+            self.flip(game, m.from as usize, old_from);
+        }
+        self.flip(game, m.to as usize, old_to);
+        let mut squares = 1u128 << m.to;
+        if !m.is_drop() {
+            squares |= 1u128 << m.from;
+        }
+        let appeared = 1u32 << game.pos.cells[m.to as usize];
+        for p in pending.iter_mut() {
+            p.squares |= squares;
+            p.cells |= appeared;
+            p.bishop |= exchanged;
+        }
+        if m.captured != NO_PIECE {
+            let basic = unpromoted(m.captured);
+            if (basic as usize) < HAND_TYPES {
+                pending[m.color as usize].hand |= 1 << basic;
+            }
+        }
+        self.emit_incremental(game, ply, m, mover_only, pending);
+    }
+
     /// 升 `sq` の中身が `old` から今の中身に変わったことを、升の照合の数え上げへ写す。
     /// 数が升の照合の数に並んだ照合は、その陣営が次に照らすときの候補にする
-    fn flip(&mut self, sq: usize, old: u8) {
-        let new = self.game.pos.cells[sq];
+    fn flip(&mut self, game: &Game, sq: usize, old: u8) {
+        let new = game.pos.cells[sq];
         if old == new {
             return;
         }
@@ -272,7 +219,7 @@ impl Scanner {
         for side in 0..2 {
             let flips = &self.plans.flips[side];
             let need = &self.plans.need[side];
-            let sat = &mut self.game.sat[side];
+            let sat = &mut self.sat[side];
             for &id in flips.down(key) {
                 sat[usize::from(id)] -= 1;
             }
@@ -289,16 +236,17 @@ impl Scanner {
     /// emitAt を差分で回したもの
     fn emit_incremental(
         &mut self,
+        game: &Game,
         ply: u32,
         m: &Move,
         mover_only: bool,
         pending: &mut [Pending; 2],
     ) {
-        let Scanner {
+        let Member {
             catalog,
             plans,
-            game,
             work,
+            sat,
             ..
         } = self;
         let sides: &[u8] = if mover_only {
@@ -380,7 +328,7 @@ impl Scanner {
                     continue;
                 }
                 // 升の照合は数え上げで済んでいる
-                if game.sat[side as usize][id as usize] != plans.need[side as usize][id as usize] {
+                if sat[side as usize][id as usize] != plans.need[side as usize][id as usize] {
                     continue;
                 }
                 debug_assert!(
@@ -425,14 +373,8 @@ impl Scanner {
     }
 
     /// emitAt をそのまま写したもの (照合用)
-    fn emit_naive(&mut self, ply: u32, m: &Move, mover_only: bool) {
-        let Scanner {
-            catalog,
-            hirate,
-            game,
-            work,
-            ..
-        } = self;
+    fn emit_naive(&mut self, game: &Game, hirate: &Position, ply: u32, m: &Move, mover_only: bool) {
+        let Member { catalog, work, .. } = self;
         let sides: &[u8] = if mover_only {
             std::slice::from_ref(&m.color)
         } else {
@@ -487,11 +429,10 @@ impl Scanner {
     }
 
     /// game-end フェーズ。居玉は戦端の手数 (無ければ合法手の数) で出す
-    fn game_end(&mut self, legal: u32, suppress: bool) {
-        let Scanner {
+    fn game_end(&mut self, game: &Game, legal: u32, suppress: bool) {
+        let Member {
             catalog,
             plans,
-            game,
             work,
             ..
         } = self;
@@ -533,16 +474,7 @@ impl Scanner {
         order_within_ply(&self.catalog.defs, &mut self.kept);
     }
 
-    fn write(&self, legal: u32, options: u32, out: &mut Vec<i32>) {
-        out.push(legal as i32);
-        if options & FINAL_POSITION != 0 {
-            let pos = &self.game.pos;
-            out.extend(pos.cells.iter().map(|&c| i32::from(c)));
-            for color in [BLACK, WHITE] {
-                out.extend(pos.hands[color as usize].iter().map(|&n| i32::from(n)));
-            }
-            out.push(i32::from(pos.turn));
-        }
+    fn write(&self, options: u32, out: &mut Vec<i32>) {
         let triples = |out: &mut Vec<i32>, list: &[Detection]| {
             out.push(list.len() as i32);
             for d in list {
@@ -552,6 +484,175 @@ impl Scanner {
         triples(out, &self.kept);
         if options & WITH_DROPPED != 0 {
             triples(out, &self.dropped);
+        }
+    }
+}
+
+impl Scanner {
+    /// 定義の集まり 1 つの走査器
+    pub fn new(catalog: Catalog) -> Scanner {
+        Scanner::group(vec![catalog])
+    }
+
+    /// 定義の集まりを 1 つ以上まとめた走査器。盤と履歴は 1 回指すだけで済み、
+    /// 出力は局ごとに集まりの順で並ぶ。集まりどうしは名前も親子も別々 (囲いと戦法のように
+    /// 互いに影響しないもの向け)
+    pub fn group(catalogs: Vec<Catalog>) -> Scanner {
+        let hirate = Position::hirate();
+        let history0 = History::from_cells(&hirate.cells);
+        let mut counts0 = [0u16; 32];
+        for &c in &hirate.cells {
+            counts0[c as usize] += 1;
+        }
+        let members: Vec<Member> = catalogs
+            .into_iter()
+            .map(|catalog| Member::new(catalog, &hirate))
+            .collect();
+        Scanner {
+            pending: vec![[Pending::default(); 2]; members.len()],
+            game: Game {
+                pos: hirate.clone(),
+                history: history0.clone(),
+                counts: counts0,
+            },
+            members,
+            hirate,
+            history0,
+            counts0,
+        }
+    }
+
+    /// 最初の集まりの定義 (集まりが 1 つのときはその全部)
+    pub fn catalog(&self) -> &Catalog {
+        &self.members[0].catalog
+    }
+
+    /// 集まりの数
+    pub fn groups(&self) -> usize {
+        self.members.len()
+    }
+
+    /// 棋譜をまとめて走査し、lib.rs の「出力」の形で `out` に積む。
+    /// `moves` は指し手 5 バイトの列、`lens` は局ごとの指し手の数。
+    /// `options` はどの集まりにも同じものを使う。
+    /// 入力が壊れていれば何も積まずに BAD_GAMES / BAD_OPTIONS を返す
+    pub fn scan(
+        &mut self,
+        moves: &[u8],
+        lens: &[u32],
+        options: u32,
+        out: &mut Vec<i32>,
+    ) -> Result<(), u32> {
+        let options = vec![options; self.members.len()];
+        self.scan_group(moves, lens, &options, out)
+    }
+
+    /// `scan` の、集まりごとに `options` を変えられるもの。`options` の数は集まりの数と同じ。
+    /// 最後の局面 (FINAL_POSITION) は、最初の集まりの `options` で決める
+    pub fn scan_group(
+        &mut self,
+        moves: &[u8],
+        lens: &[u32],
+        options: &[u32],
+        out: &mut Vec<i32>,
+    ) -> Result<(), u32> {
+        let total = lens
+            .iter()
+            .try_fold(0usize, |sum, &n| sum.checked_add(n as usize));
+        if total.and_then(|n| n.checked_mul(MOVE_BYTES)) != Some(moves.len()) {
+            return Err(BAD_GAMES);
+        }
+        if options.len() != self.members.len() || options.iter().any(|&o| o & !KNOWN_OPTIONS != 0) {
+            return Err(BAD_OPTIONS);
+        }
+        let mut rest = moves;
+        for &n in lens {
+            let (game, tail) = rest.split_at(n as usize * MOVE_BYTES);
+            rest = tail;
+            self.scan_game(game, options, out);
+        }
+        Ok(())
+    }
+
+    fn scan_game(&mut self, usis: &[u8], options: &[u32], out: &mut Vec<i32>) {
+        let Scanner {
+            hirate,
+            history0,
+            counts0,
+            game,
+            members,
+            pending,
+        } = self;
+        game.pos.clone_from(hirate);
+        game.history.clone_from(history0);
+        game.counts = *counts0;
+        for (member, pending) in members.iter_mut().zip(pending.iter_mut()) {
+            member.reset();
+            *pending = [Pending::default(); 2];
+        }
+        let mut legal = 0u32;
+        for usi in usis.as_chunks::<MOVE_BYTES>().0 {
+            let Some(m) = game.pos.move_from_usi(usi) else {
+                break;
+            };
+            if !game.pos.is_valid_move(&m) {
+                break;
+            }
+            legal += 1;
+            let ply = legal;
+            let initiator = game.history.bishop_exchange_initiator();
+            let old_from = if m.is_drop() {
+                0
+            } else {
+                game.pos.cells[m.from as usize]
+            };
+            let old_to = game.pos.cells[m.to as usize];
+            // 履歴は doMove の前に記録する (scan.ts と同じ)
+            game.history.record_move(&m, ply);
+            game.pos.do_move(&m);
+            let counts = &mut game.counts;
+            let cells = &game.pos.cells;
+            if !m.is_drop() {
+                counts[old_from as usize] -= 1;
+                counts[cells[m.from as usize] as usize] += 1;
+            }
+            counts[old_to as usize] -= 1;
+            counts[cells[m.to as usize] as usize] += 1;
+
+            let step = Step {
+                ply,
+                m,
+                old_from,
+                old_to,
+                exchanged: initiator.is_none()
+                    && game.history.bishop_exchange_initiator().is_some(),
+            };
+            for ((member, pending), &options) in
+                members.iter_mut().zip(pending.iter_mut()).zip(options)
+            {
+                // 出せる鍵を出し尽くしたら、あとは合法手を数えて盤を進めるだけ
+                if !member.finished() {
+                    member.step(game, hirate, &step, options, pending);
+                }
+            }
+        }
+        if let Some(&first) = options.first() {
+            out.push(legal as i32);
+            if first & FINAL_POSITION != 0 {
+                let pos = &game.pos;
+                out.extend(pos.cells.iter().map(|&c| i32::from(c)));
+                for color in [BLACK, WHITE] {
+                    out.extend(pos.hands[color as usize].iter().map(|&n| i32::from(n)));
+                }
+                out.push(i32::from(pos.turn));
+            }
+        }
+        for (member, &options) in members.iter_mut().zip(options) {
+            if legal > 0 {
+                member.game_end(game, legal, options & SUPPRESS_GAME_END != 0);
+            }
+            member.sift(options & REQUIRE_PARENT != 0);
+            member.write(options, out);
         }
     }
 }
