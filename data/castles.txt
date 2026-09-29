@@ -1,4 +1,4 @@
-# Castle / strategy templates derived from bioshogi
+# Castle / strategy definitions derived from bioshogi
 # (https://github.com/akicho8/bioshogi).
 #
 # Names and (file, rank, piece-type) coordinate data are treated as factual
@@ -10,7 +10,7 @@
 
 # Last regenerated: 2026-05-11T21:25:00.385643
 # Source: defense_info.rb (133 metadata rows) 
-#  ∩  shape_info.rb (394 ASCII templates)
+#  ∩  shape_info.rb (394 ASCII definitions)
 
 === name: いちご囲い
 

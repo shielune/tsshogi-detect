@@ -15,16 +15,17 @@
  *
  * 2 と 3 は「狭いことを言っている定義ほど代表にしたい」という同じ考えの二段構え。
  * 美濃囲いと片美濃囲いが同じ手で成立したら、親である片美濃囲いより子の美濃囲いを
- * 前に出す。系統の付いていないテンプレどうしは 2 で差が付かないので、3 の要件の数で
+ * 前に出す。系統の付いていない定義どうしは 2 で差が付かないので、3 の要件の数で
  * 決まる。
  */
 
+import { Color } from 'tsshogi'
 import { ancestorDepths } from './hierarchy.ts'
-import type { DetectedTemplate, DetectedTemplateAt, FormationTemplate } from './template.ts'
+import type { DetectedDefinition, DetectedDefinitionAt, FormationDefinition } from './definition.ts'
 
-/** テンプレの優先度。書いていなければ 0。大きいほど前に出る。 */
-export function priorityOf(template: FormationTemplate): number {
-  return template.priority ?? 0
+/** 定義の優先度。書いていなければ 0。大きいほど前に出る。 */
+export function priorityOf(definition: FormationDefinition): number {
+  return definition.priority ?? 0
 }
 
 /**
@@ -33,24 +34,24 @@ export function priorityOf(template: FormationTemplate): number {
  * 升の要件に加えて、盤の外の条件 (手数・最終手・駒打ち・角交換) も 1 つずつ数える。
  * 陣営の別 (`side:`) は照合の前に絞る仕掛けで、形の狭さとは別の話なので数えない。
  */
-function strictnessOf(template: FormationTemplate): number {
-  let count = template.placements.length
-  if (template.plyEq !== undefined) count += 1
-  if (template.plyMin !== undefined) count += 1
-  if (template.plyMax !== undefined) count += 1
-  if ((template.finishMoves?.length ?? 0) > 0) count += 1
-  if (template.noDrop === true) count += 1
-  if (template.bishopExchange !== undefined) count += 1
+function strictnessOf(definition: FormationDefinition): number {
+  let count = definition.placements.length
+  if (definition.plyEq !== undefined) count += 1
+  if (definition.plyMin !== undefined) count += 1
+  if (definition.plyMax !== undefined) count += 1
+  if ((definition.finishMoves?.length ?? 0) > 0) count += 1
+  if (definition.noDrop === true) count += 1
+  if (definition.bishopExchange !== undefined) count += 1
   return count
 }
 
 /**
  * 成立した手数。手数を持たない検出 (局面 1 枚) では 0 として扱う。
  *
- * `DetectedTemplate` には `ply` が無いので、読めたときだけ読む。
+ * `DetectedDefinition` には `ply` が無いので、読めたときだけ読む。
  */
-function plyOf(detected: DetectedTemplate): number {
-  return (detected as Partial<DetectedTemplateAt>).ply ?? 0
+function plyOf(detected: DetectedDefinition): number {
+  return (detected as Partial<DetectedDefinitionAt>).ply ?? 0
 }
 
 /**
@@ -65,28 +66,28 @@ function compareName(a: string, b: string): number {
 
 /** 上の 5 段をこの順に見る比較器を作る。深さは毎回辿らずに引く。 */
 function comparator(
-  depths: ReadonlyMap<FormationTemplate, number>,
-): (a: DetectedTemplate, b: DetectedTemplate) => number {
-  const depthOf = (detected: DetectedTemplate): number => depths.get(detected.template) ?? 0
+  depths: ReadonlyMap<FormationDefinition, number>,
+): (a: DetectedDefinition, b: DetectedDefinition) => number {
+  const depthOf = (detected: DetectedDefinition): number => depths.get(detected.definition) ?? 0
   return (a, b) =>
-    priorityOf(b.template) - priorityOf(a.template) ||
+    priorityOf(b.definition) - priorityOf(a.definition) ||
     depthOf(b) - depthOf(a) ||
-    strictnessOf(b.template) - strictnessOf(a.template) ||
+    strictnessOf(b.definition) - strictnessOf(a.definition) ||
     plyOf(a) - plyOf(b) ||
-    compareName(a.template.name, b.template.name)
+    compareName(a.definition.name, b.definition.name)
 }
 
 /**
  * 配列全体を並べ替える。手数を持たない検出 (局面 1 枚) 用。
  *
- * `templates` は系統を辿るための集合。ここに親が居ないテンプレは深さ 0 として扱う。
+ * `definitions` は系統を辿るための集合。ここに親が居ない定義は深さ 0 として扱う。
  */
-export function orderDetections<T extends DetectedTemplate>(
+export function orderDetections<T extends DetectedDefinition>(
   detections: readonly T[],
-  templates: readonly FormationTemplate[],
+  definitions: readonly FormationDefinition[],
 ): T[] {
   if (detections.length < 2) return [...detections]
-  return [...detections].sort(comparator(ancestorDepths(templates)))
+  return [...detections].sort(comparator(ancestorDepths(definitions)))
 }
 
 /**
@@ -100,12 +101,12 @@ export function orderDetections<T extends DetectedTemplate>(
  * 固まりの中では手数が全員同じなので、決着は優先度・深さ・厳しさ・名前で付く。
  */
 export function orderDetectionsWithinPly(
-  detections: readonly DetectedTemplateAt[],
-  templates: readonly FormationTemplate[],
-): DetectedTemplateAt[] {
+  detections: readonly DetectedDefinitionAt[],
+  definitions: readonly FormationDefinition[],
+): DetectedDefinitionAt[] {
   if (detections.length < 2) return [...detections]
-  const compare = comparator(ancestorDepths(templates))
-  const ordered: DetectedTemplateAt[] = []
+  const compare = comparator(ancestorDepths(definitions))
+  const ordered: DetectedDefinitionAt[] = []
   for (let start = 0; start < detections.length; ) {
     // 固まりの手数は先頭で決まる。ここから同じ手数が続く間を 1 つの固まりとして見る
     const ply = detections[start]?.ply
@@ -115,4 +116,30 @@ export function orderDetectionsWithinPly(
     start = end
   }
   return ordered
+}
+
+/**
+ * 定義ごとの「同じ手数の固まりの中での順位の組」。WASM の走査器 (src/wasm/) へ渡すためのもの。
+ *
+ * 固まりの中では手数が全員同じなので、比較器の手数の段は効かない。残る段 (優先度・深さ・
+ * 厳しさ・名前) で定義を安定に並べ、隣どうしで差が付いたところで組の番号を 1 つ進める。
+ * 同じ組の定義どうしは比較器が 0 を返す相手なので、並べ替えのあとも積まれた順のまま残る。
+ *
+ * 返す配列は `definitions` と同じ並びで、組の番号は小さいほど前。
+ */
+export function definitionOrderTiers(definitions: readonly FormationDefinition[]): number[] {
+  const compare = comparator(ancestorDepths(definitions))
+  // 陣営は比較器が見ないので何でもよい。手数を持たない検出として比べる
+  const probes = definitions.map((definition): DetectedDefinition => ({ definition, side: Color.BLACK }))
+  const probe = (index: number): DetectedDefinition => probes[index] as DetectedDefinition
+  const sorted = probes.map((_, index) => index).sort((a, b) => compare(probe(a), probe(b)))
+  const tiers = new Array<number>(definitions.length).fill(0)
+  let tier = -1
+  let previous: number | undefined
+  for (const index of sorted) {
+    if (previous === undefined || compare(probe(previous), probe(index)) !== 0) tier += 1
+    tiers[index] = tier
+    previous = index
+  }
+  return tiers
 }

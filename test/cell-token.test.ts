@@ -8,11 +8,11 @@ import {
   normalizeCell,
   PIECE_ORDER,
   PIECE_SFEN,
-  type TemplateCell,
+  type DefinitionCell,
   tokenFromCell,
 } from '../src/cell-token.ts'
 import { extractGrid } from '../src/grid-text.ts'
-import { parseTemplateFile } from '../src/parser.ts'
+import { parseDefinitionFile } from '../src/parser.ts'
 
 const ASSETS = join(import.meta.dir, '../data')
 const FILES = ['castles.txt', 'strategies.txt'] as const
@@ -70,6 +70,15 @@ describe('cellFromToken', () => {
     })
   })
 
+  test('小文字の除外は相手駒の除外になる', () => {
+    expect(cellFromToken('[!rb]')).toEqual({
+      kind: 'pieces',
+      pieces: [PieceType.ROOK, PieceType.BISHOP],
+      side: 'opponent',
+      negated: true,
+    })
+  })
+
   test('升をまたいだ OR (?X) は別の kind になる', () => {
     expect(cellFromToken('?r')).toEqual({
       kind: 'orPieces',
@@ -83,7 +92,23 @@ describe('cellFromToken', () => {
     })
   })
 
-  test.each(['', '[]', '[!]', '+', 'X', '[G', 'GS', '[GX]', '..', '?', '?_', '?*', '?[!GS]'])(
+  test.each([
+    '',
+    '[]',
+    '[!]',
+    '+',
+    'X',
+    '[G',
+    'GS',
+    '[GX]',
+    '..',
+    '?',
+    '?_',
+    '?*',
+    '?[!GS]',
+    '[gs]',
+    '[!Gs]',
+  ])(
     '解析不能なら null: %p',
     (token) => {
       expect(cellFromToken(token)).toBeNull()
@@ -122,6 +147,9 @@ describe('tokenFromCell', () => {
     '[GS]',
     '[!GS]',
     '[!R]',
+    '[!r]',
+    '[!gs]',
+    '[!+b]',
     '[SGN]',
     '?R',
     '?r',
@@ -172,15 +200,14 @@ describe('normalizeCell', () => {
     ).toEqual({ kind: 'pieces', pieces: [PieceType.GOLD], side: 'opponent', negated: false })
   })
 
-  test('相手駒の否定は書けないので否定を落とす', () => {
-    expect(
-      normalizeCell({
-        kind: 'pieces',
-        pieces: [PieceType.ROOK],
-        side: 'opponent',
-        negated: true,
-      }),
-    ).toEqual({ kind: 'pieces', pieces: [PieceType.ROOK], side: 'opponent', negated: false })
+  test('相手駒の除外は複数駒のまま残す', () => {
+    const cell: DefinitionCell = {
+      kind: 'pieces',
+      pieces: [PieceType.ROOK, PieceType.BISHOP],
+      side: 'opponent',
+      negated: true,
+    }
+    expect(normalizeCell(cell)).toEqual(cell)
   })
 
   test('駒を 1 つも選んでいなければ無指定に落ちる', () => {
@@ -233,7 +260,18 @@ describe('flipCellSide', () => {
     expect(tokenFromCell(flipped)).toBe('?r')
   })
 
-  test.each(['.', '_', '*', '[GS]', '[!GS]', '?[RB]'])(
+  test.each([
+    ['[!GS]', '[!gs]'],
+    ['[!r]', '[!R]'],
+  ])('除外は何駒でも先後を入れ替えられる: %p', (token, expected) => {
+    const cell = cellFromToken(token)
+    if (cell === null) throw new Error('unreachable')
+    const flipped = flipCellSide(cell)
+    if (flipped === null) throw new Error('unreachable')
+    expect(tokenFromCell(flipped)).toBe(expected)
+  })
+
+  test.each(['.', '_', '*', '[GS]', '?[RB]'])(
     '先後を書き分けられないセルは null: %p',
     (token) => {
       const cell = cellFromToken(token)
@@ -248,9 +286,9 @@ describe('生成物の合法性', () => {
   const SIDES = ['own', 'opponent'] as const
 
   test('全組み合わせで、生成したトークンがパーサを通る', () => {
-    const cells: TemplateCell[] = PIECE_ORDER.flatMap((piece, index) =>
+    const cells: DefinitionCell[] = PIECE_ORDER.flatMap((piece, index) =>
       SIDES.flatMap((side) =>
-        [false, true].map((negated): TemplateCell => {
+        [false, true].map((negated): DefinitionCell => {
           const second = PIECE_ORDER[(index + 1) % PIECE_ORDER.length]
           const third = PIECE_ORDER[(index + 2) % PIECE_ORDER.length]
           const pieces = [piece, second, third].filter((p) => p !== undefined)
@@ -260,7 +298,7 @@ describe('生成物の合法性', () => {
     )
 
     // OR も同じ組み合わせで回す (相手駒 x 複数駒は normalizeCell が詰める)
-    const orCells: TemplateCell[] = cells.flatMap((cell) =>
+    const orCells: DefinitionCell[] = cells.flatMap((cell) =>
       cell.kind === 'pieces' && !cell.negated
         ? [{ kind: 'orPieces', pieces: cell.pieces, side: cell.side }]
         : [],
@@ -281,7 +319,7 @@ describe('生成物の合法性', () => {
       // グリッドに埋めてもパーサが例外を投げない。
       const row = [token, ...Array.from({ length: 8 }, () => '.')].join(' ')
       const dsl = ['=== name: テスト', ...Array.from({ length: 9 }, () => row)].join('\n')
-      expect(() => parseTemplateFile(dsl)).not.toThrow()
+      expect(() => parseDefinitionFile(dsl)).not.toThrow()
     }
   })
 
@@ -297,18 +335,26 @@ describe('生成物の合法性', () => {
  * グリッド由来の要件だけを比べる (ヘッダ由来の kind は除外)。
  */
 describe('全定義でパーサとの一致 (ドリフト検知)', () => {
-  const GRID_KINDS = new Set(['exact', 'opponent', 'anyOf', 'notOf', 'empty', 'anyPiece'])
+  const GRID_KINDS = new Set([
+    'exact',
+    'opponent',
+    'anyOf',
+    'notOf',
+    'opponentNotOf',
+    'empty',
+    'anyPiece',
+  ])
 
   test.each([...FILES])('%s', (file) => {
     const content = readFileSync(join(ASSETS, file), 'utf8')
     const lines = content.split('\n')
-    const parsed = parseTemplateFile(content)
+    const parsed = parseDefinitionFile(content)
     expect(parsed.length).toBeGreaterThan(0)
 
-    for (const template of parsed) {
+    for (const definition of parsed) {
       // 盤の形を持たない分類の節 (category: true) はグリッドが無いので比べるものが無い。
-      if (template.category) continue
-      const source = lines.slice(template.sourceStartLine - 1, template.sourceEndLine).join('\n')
+      if (definition.category) continue
+      const source = lines.slice(definition.sourceStartLine - 1, definition.sourceEndLine).join('\n')
       const extraction = extractGrid(source)
       expect(extraction.ok).toBe(true)
       if (!extraction.ok) continue
@@ -327,10 +373,12 @@ describe('全定義でパーサとの一致 (ドリフト検知)', () => {
                 ? 'empty'
                 : state.kind === 'anyPiece'
                   ? 'anyPiece'
-                  : state.side === 'opponent'
-                    ? 'opponent'
-                    : state.negated
-                      ? 'notOf'
+                  : state.negated
+                    ? state.side === 'opponent'
+                      ? 'opponentNotOf'
+                      : 'notOf'
+                    : state.side === 'opponent'
+                      ? 'opponent'
                       : pieces.length > 1
                         ? 'anyOf'
                         : 'exact'
@@ -340,7 +388,7 @@ describe('全定義でパーサとの一致 (ドリフト検知)', () => {
         .filter((entry) => entry !== null)
         .sort()
 
-      const theirs = template.placements
+      const theirs = definition.placements
         .filter((placement) => GRID_KINDS.has(placement.kind))
         .map(
           (placement) =>
@@ -363,7 +411,7 @@ describe('全定義でパーサとの一致 (ドリフト検知)', () => {
       }
 
       const orTheirs = new Map(
-        template.placements
+        definition.placements
           .filter(
             (placement) =>
               placement.kind === 'pieceInSquares' || placement.kind === 'opponentInSquares',

@@ -1,0 +1,15 @@
+[package]
+name = "tsshogi-detect-scan"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# WASM として配る cdylib と、cargo test から呼ぶための rlib の両方を出す
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
+panic = "abort"

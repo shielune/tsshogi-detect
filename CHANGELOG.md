@@ -1,7 +1,78 @@
 # 変更履歴
 
-版ごとの変わりどころ。テンプレートの増減と定義の変更は
-`bun run scripts/diff-templates.ts <前の版>` の出力から書き起こしている。
+版ごとの変わりどころ。定義の増減と中身の変更は
+`bun run scripts/diff-definitions.ts <前の版>` の出力から書き起こしている。
+
+## 0.7.0 (2026-09-29)
+
+### 足したもの
+
+- WASM の走査器 (`tsshogi-detect/wasm`)。`loadScanner()` で組み、`compile(definitions)`
+  した上で `record` / `recordWithDropped` / `recordMany` / `recordManyWithDropped` を
+  呼ぶ。結果は `recordDefinitions` / `recordDefinitionsWithDropped` と同じで、返る
+  `definition` は渡したオブジェクトそのもの。平手から始まる USI の棋譜だけを扱い、
+  符号にできない定義は `UnsupportedDefinitionError` で断る (TS 版に戻す合図)。
+  - 走査器は `rust/` にあり、`bun run build:wasm` で `src/wasm/scanner.gen.ts` に埋める。
+  - `bun run scripts/bench-wasm.ts` で TS 版と 1 局あたりの時間を比べられる。
+  - 実際の棋譜 (1 行 1 局の USI) で測るときは `scripts/bench-wasm-kifu.ts` (bun でも
+    node でも動く) と `rust/examples/bench.rs` (WASM にしない Rust そのもの) を使う。
+    定義は `scripts/bench-definitions.ts` がアプリの dev サーバから取って控え、
+    `scripts/bench-encode-definitions.ts` が走査器の符号にして両方へ渡す。250 万局の
+    棋譜で 1 局あたり WASM 0.13 ms、Rust 0.097 ms (元の TS 版は 2 万局の標本で 4.5 ms)。
+    標本 2 万局では 3 つの結果が一致し、Rust と WASM は 250 万局の全局で一致した。
+- `gateParents` (`src/hierarchy.ts`) と `definitionOrderTiers` (`src/order.ts`)。
+  親ゲートの相手と、同じ手数の中での順位を、定義ごとに前もって求める。走査器へ
+  渡すためのもので、TS 版の走査の挙動は変わらない。
+
+## 0.6.0 (2026-09-27)
+
+### 足したもの
+
+- 相手駒の除外 (`[!r]`)。括弧の中を小文字で書くと「その升に相手のその駒が居ない」
+  という要件になる。空升・自分の駒・相手の別の駒は満たす。`[!GS]` が相手の金銀を
+  通すのと同じ考えで、色が逆になっただけ。
+  - パーサの読んだ形は新しい kind の `opponentNotOf`。`NotOfPieces` は 4 つめの引数に
+    色を取るようになった (省略は今までどおり自駒)。
+  - 盤面エディタ向けのセル (`DefinitionCell`) も相手駒の除外を持てる。`flipCellSide`
+    は除外なら何駒並んでいても先後を入れ替える。
+- 角交換をしていないことの要求 (`bishop_exchange: never`)。角交換が済んだ局面では
+  成立させない。`false` は「問わない」とも読めるので受けない。
+
+### 変えたもの (使う側の書き直しが要る)
+
+- 升の括弧の中で大文字と小文字を混ぜられなくなった (`[Gs]` `[!Gs]`)。小文字を
+  書けるのは除外だけで、並べる側 (`[gs]`) は書けない。今までは色を見ずに自駒として
+  読んでいた。`data/` の定義には当てはまるものが無いので、囲いと戦法の中身は
+  変わらない。
+- 最終手の取った駒 (`finish: … x [br]`) は今までどおり大文字と小文字を区別しない。
+  取った駒には色が無いので、升と違って小文字の並びも混ぜ書きも同じ意味で通す。
+
+## 0.5.0 (2026-09-22)
+
+### 変えたもの (使う側の書き直しが要る)
+
+- 囲いと戦法の「テンプレート」を「定義」と呼び直した。書き出す名前から `Template` が
+  消えて `Definition` になる。盤の形を書いた DSL の本文と、`data/` に入っている
+  囲い 113 件・戦法 244 件の中身は一字も変わっていない。読み替えは次のとおり。
+  - `FormationTemplate` は `FormationDefinition`、`StrategyTemplate` は
+    `StrategyDefinition`。
+  - `ParsedTemplate` は `ParsedDefinition`、`parseTemplateFile` は
+    `parseDefinitionFile`、`TemplateSyntaxError` は `DefinitionSyntaxError`。
+  - `TemplateSquare` `TemplateCell` `TemplateGrid` `TemplateRequirement` は
+    それぞれ `Definition` 始まりへ。`TemplateFinishCapture` と `TemplateFinishMove`
+    も同じ。
+  - `DetectedTemplate` と `DetectedTemplateAt` は `DetectedDefinition` と
+    `DetectedDefinitionAt`。**持っている項目の名前も `template` から `definition`
+    へ変わる**。
+  - `detectTemplates` `matchesTemplate` `recordTemplates`
+    `recordTemplatesWithDropped` `ancestorTemplates` `readTemplateName`
+    `setTemplateName` は、いずれも同じ規則で `Definition` 側へ。
+    `RecordTemplatesOptions` は `RecordDefinitionsOptions`。
+- 手筋の `TechniqueTemplate` は `TechniqueMatcher` にした。こちらは盤の形ではなく
+  コードで書いた判定器なので、定義とは呼ばない。`DetectedTechnique` が持つ項目も
+  `template` から `matcher` へ変わる。格言の側は元から `pattern` なので変わらない。
+- `scripts/generate-templates.ts` は `scripts/generate-definitions.ts`、
+  `scripts/diff-templates.ts` は `scripts/diff-definitions.ts` に改名した。
 
 ## 0.4.1 (2026-09-22)
 

@@ -1,30 +1,30 @@
 /**
- * 指し手列の走査。各テンプレが**初めて成立した手**を拾う。
+ * 指し手列の走査。各定義が**初めて成立した手**を拾う。
  *
  * 照合そのものは match.ts、系統の扱いは hierarchy.ts に置いてある。ここが見るのは
- * 「どの局面でどのテンプレを照らすか」と「1 度きりにする」ところだけ。
+ * 「どの局面でどの定義を照らすか」と「1 度きりにする」ところだけ。
  */
 
 import { Color, type Move, Position } from 'tsshogi'
 import { dropUnestablishedChildren } from './hierarchy.ts'
 import {
-  detectTemplates,
+  detectDefinitions,
   hasBishopExchangeConstraint,
   hasDropConstraint,
   hasFinishConstraint,
   hasHistoryRequirement,
   hasPlyConstraint,
   matchesFinishMove,
-  matchesTemplate,
+  matchesDefinition,
   satisfiesPlyConstraint,
 } from './match.ts'
 import { MoveHistory } from './move-history.ts'
 import { orderDetectionsWithinPly } from './order.ts'
-import type { DetectedTemplateAt, FormationTemplate } from './template.ts'
+import type { DetectedDefinitionAt, FormationDefinition } from './definition.ts'
 
 const SIDES: readonly Color[] = [Color.BLACK, Color.WHITE]
 
-export type RecordTemplatesOptions = {
+export type RecordDefinitionsOptions = {
   /** 初期局面。省略時は平手。 */
   readonly initial?: Position
   /**
@@ -32,57 +32,57 @@ export type RecordTemplatesOptions = {
    *
    * 囲い・戦法は指した側で成立するものなので、相手の手で条件が満たされても
    * その陣営の成立は次に自分が指すまで待たせたい、というときに立てる。これが無いと
-   * `2手目△7四歩戦法` (plyEq: 2) のような手数指定テンプレが、1 手目に同じ形を
+   * `2手目△7四歩戦法` (plyEq: 2) のような手数指定定義が、1 手目に同じ形を
    * 作った相手側にも付く。
    */
   readonly moverOnly?: boolean
   /**
    * 親が成立していない子の成立を落とす (dropUnestablishedChildren)。既定は落とさない。
    *
-   * 走査そのものは全テンプレ独立に回して、最後に系統でふるいをかける。
+   * 走査そのものは全定義独立に回して、最後に系統でふるいをかける。
    */
   readonly requireParent?: boolean
   /**
-   * game-end 評価テンプレ (居玉) を、他のテンプレが成立済みの陣営には出さない。
+   * game-end 評価定義 (居玉) を、他の定義が成立済みの陣営には出さない。
    * 囲い (recordCastles) の挙動。戦法は抑制しない (Dart 版と同じ)。
    */
   readonly suppressGameEndIfDetected?: boolean
 }
 
 /**
- * 指し手列を走査し、各テンプレが初めて成立した手だけを ply 順に返す。
+ * 指し手列を走査し、各定義が初めて成立した手だけを ply 順に返す。
  *
  * - ply 0 (初期局面) は対象外
- * - 同じ (テンプレ名, 陣営) は最初の 1 回だけ
- * - game-end 評価テンプレは走査後に 1 度だけ評価し、開戦手数 (outbreakTurn) が
+ * - 同じ (定義名, 陣営) は最初の 1 回だけ
+ * - game-end 評価定義は走査後に 1 度だけ評価し、開戦手数 (outbreakTurn) が
  *   あればその手数で記録する。玉が動いていないという状態の評価なので、ここだけは
  *   `moverOnly` の制限を受けない
  */
-export function recordTemplates(
-  templates: readonly FormationTemplate[],
+export function recordDefinitions(
+  definitions: readonly FormationDefinition[],
   moves: readonly Move[],
-  options?: RecordTemplatesOptions,
-): DetectedTemplateAt[] {
-  return sift(scanTemplates(templates, moves, options), templates, options)
+  options?: RecordDefinitionsOptions,
+): DetectedDefinitionAt[] {
+  return sift(scanDefinitions(definitions, moves, options), definitions, options)
 }
 
 /**
- * `recordTemplates` と同じ走査に、系統のふるいで落ちた検出を添えて返す。
+ * `recordDefinitions` と同じ走査に、系統のふるいで落ちた検出を添えて返す。
  *
  * 落ちた件数を数えるためだけのもの (系譜図の「親が成立せずに落ちた実績」)。
  * ふるいを通していない生の検出を単体で外へ出さないよう、必ず対で返す。
  */
-export function recordTemplatesWithDropped(
-  templates: readonly FormationTemplate[],
+export function recordDefinitionsWithDropped(
+  definitions: readonly FormationDefinition[],
   moves: readonly Move[],
-  options?: RecordTemplatesOptions,
-): { readonly detections: DetectedTemplateAt[]; readonly dropped: DetectedTemplateAt[] } {
-  const scanned = scanTemplates(templates, moves, options)
-  const detections = sift(scanned, templates, options)
-  const kept = new Set(detections.map((detected) => `${detected.template.name}|${detected.side}`))
+  options?: RecordDefinitionsOptions,
+): { readonly detections: DetectedDefinitionAt[]; readonly dropped: DetectedDefinitionAt[] } {
+  const scanned = scanDefinitions(definitions, moves, options)
+  const detections = sift(scanned, definitions, options)
+  const kept = new Set(detections.map((detected) => `${detected.definition.name}|${detected.side}`))
   return {
     detections,
-    dropped: scanned.filter((detected) => !kept.has(`${detected.template.name}|${detected.side}`)),
+    dropped: scanned.filter((detected) => !kept.has(`${detected.definition.name}|${detected.side}`)),
   }
 }
 
@@ -90,66 +90,66 @@ export function recordTemplatesWithDropped(
  * 走査の後始末。親ゲートでふるってから、同じ手数の中を並べ替える。
  */
 function sift(
-  scanned: readonly DetectedTemplateAt[],
-  templates: readonly FormationTemplate[],
-  options?: RecordTemplatesOptions,
-): DetectedTemplateAt[] {
+  scanned: readonly DetectedDefinitionAt[],
+  definitions: readonly FormationDefinition[],
+  options?: RecordDefinitionsOptions,
+): DetectedDefinitionAt[] {
   const gated =
-    options?.requireParent === true ? dropUnestablishedChildren(scanned, templates) : [...scanned]
+    options?.requireParent === true ? dropUnestablishedChildren(scanned, definitions) : [...scanned]
   // 並べ替えは同じ手数の固まりの中だけ。固まりの位置は動かさないので、
   // 手数の昇順から外れている末尾の居玉も今の場所に残る。
-  return orderDetectionsWithinPly(gated, templates)
+  return orderDetectionsWithinPly(gated, definitions)
 }
 
 /** 走査本体。系統のふるいは通していないので、外に出すのは上の 2 つだけ。 */
-function scanTemplates(
-  templates: readonly FormationTemplate[],
+function scanDefinitions(
+  definitions: readonly FormationDefinition[],
   moves: readonly Move[],
-  options?: RecordTemplatesOptions,
-): DetectedTemplateAt[] {
+  options?: RecordDefinitionsOptions,
+): DetectedDefinitionAt[] {
   const position = (options?.initial ?? new Position()).clone()
   const history = new MoveHistory()
   history.initFromPosition(position)
 
-  const results: DetectedTemplateAt[] = []
+  const results: DetectedDefinitionAt[] = []
   const seen = new Set<string>()
-  const gameEndTemplates = templates.filter((template) => template.evaluateAtGameEnd === true)
+  const gameEndDefinitions = definitions.filter((definition) => definition.evaluateAtGameEnd === true)
   // カテゴリは走査では成立しないので、打ち切りの目標数から外す (外さないと届かなくなる)
-  const scannable = templates.filter((template) => template.category !== true).length
+  const scannable = definitions.filter((definition) => definition.category !== true).length
 
-  const emit = (template: FormationTemplate, side: Color, ply: number): void => {
-    const key = `${template.name}|${side}`
+  const emit = (definition: FormationDefinition, side: Color, ply: number): void => {
+    const key = `${definition.name}|${side}`
     if (seen.has(key)) return
     seen.add(key)
-    results.push({ template, side, ply })
+    results.push({ definition, side, ply })
   }
 
   const emitAt = (ply: number, move: Move): void => {
     const mover = move.color
     const moverOnly = options?.moverOnly === true
     const sides = moverOnly ? [mover] : SIDES
-    // 両陣営のときは side を渡さない (テンプレ毎に先手・後手と並ぶ元の順序を保つ)
-    for (const detected of detectTemplates(templates, position, moverOnly ? mover : undefined)) {
-      emit(detected.template, detected.side, ply)
+    // 両陣営のときは side を渡さない (定義毎に先手・後手と並ぶ元の順序を保つ)
+    for (const detected of detectDefinitions(definitions, position, moverOnly ? mover : undefined)) {
+      emit(detected.definition, detected.side, ply)
     }
-    for (const template of templates) {
-      if (template.evaluateAtGameEnd === true || template.category === true) continue
-      // ply 制約も履歴要件も打ち・最終手・角交換の制約も無いものは detectTemplates が拾い済み
+    for (const definition of definitions) {
+      if (definition.evaluateAtGameEnd === true || definition.category === true) continue
+      // ply 制約も履歴要件も打ち・最終手・角交換の制約も無いものは detectDefinitions が拾い済み
       if (
-        !hasPlyConstraint(template) &&
-        !hasHistoryRequirement(template) &&
-        !hasDropConstraint(template) &&
-        !hasFinishConstraint(template) &&
-        !hasBishopExchangeConstraint(template)
+        !hasPlyConstraint(definition) &&
+        !hasHistoryRequirement(definition) &&
+        !hasDropConstraint(definition) &&
+        !hasFinishConstraint(definition) &&
+        !hasBishopExchangeConstraint(definition)
       ) {
         continue
       }
-      if (hasPlyConstraint(template) && !satisfiesPlyConstraint(template, ply)) continue
-      // 最終手を縛るテンプレは、その手を指した側にしか成立しようが無い
-      for (const side of hasFinishConstraint(template) ? [mover] : sides) {
-        if (!matchesFinishMove(template, side, move)) continue
-        if (!matchesTemplate(position, template, side, history)) continue
-        emit(template, side, ply)
+      if (hasPlyConstraint(definition) && !satisfiesPlyConstraint(definition, ply)) continue
+      // 最終手を縛る定義は、その手を指した側にしか成立しようが無い
+      for (const side of hasFinishConstraint(definition) ? [mover] : sides) {
+        if (!matchesFinishMove(definition, side, move)) continue
+        if (!matchesDefinition(position, definition, side, history)) continue
+        emit(definition, side, ply)
       }
     }
   }
@@ -161,19 +161,19 @@ function scanTemplates(
     position.doMove(move, { ignoreValidation: true })
     // 駒落ちなら 1 手目が後手なので、手番は ply の偶奇ではなく指し手から取る
     emitAt(ply, move)
-    // 全テンプレが両陣営で見つかったら以降の走査に意味は無い
-    if (gameEndTemplates.length === 0 && seen.size === scannable * 2) return results
+    // 全定義が両陣営で見つかったら以降の走査に意味は無い
+    if (gameEndDefinitions.length === 0 && seen.size === scannable * 2) return results
   }
   if (moves.length === 0) return results
 
-  // game-end フェーズ。抑制オプション時は、既にテンプレ検出済みの陣営へは出さない
+  // game-end フェーズ。抑制オプション時は、既に定義検出済みの陣営へは出さない
   const detectedSides = new Set(results.map((detected) => detected.side))
-  for (const template of gameEndTemplates) {
+  for (const definition of gameEndDefinitions) {
     for (const side of SIDES) {
       if (options?.suppressGameEndIfDetected === true && detectedSides.has(side)) continue
-      if (!matchesTemplate(position, template, side, history)) continue
+      if (!matchesDefinition(position, definition, side, history)) continue
       // 居玉は「戦いが起きた時点で玉が動いていない」状態なので、戦端の手数で出す
-      emit(template, side, history.outbreakTurn ?? moves.length)
+      emit(definition, side, history.outbreakTurn ?? moves.length)
     }
   }
   return results

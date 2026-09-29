@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "version": {
+    "source": "package.json",
+    "derivedFiles": [],
+    "bumpCommand": null
+  },
+  "branches": {
+    "source": "develop",
+    "target": "master"
+  },
+  "pullRequest": {
+    "titleTemplate": "chore: release v{version}",
+    "mergeMethod": "merge"
+  },
+  "tag": {
+    "template": "v{version}",
+    "annotated": true
+  },
+  "checks": {
+    "required": []
+  },
+  "workflows": {
+    "releaseFiles": [],
+    "triggerFingerprint": ""
+  },
+  "notes": {
+    "mode": "file",
+    "file": "CHANGELOG.md"
+  },
+  "artifacts": {
+    "buildCommands": [],
+    "paths": []
+  }
+}

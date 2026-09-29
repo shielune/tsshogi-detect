@@ -14,7 +14,7 @@ import {
   reverseColor,
   Square,
 } from 'tsshogi'
-import { type TechniqueTemplate, detectTechniquesAtMove } from './technique.ts'
+import { type TechniqueMatcher, detectTechniquesAtMove } from './technique.ts'
 
 export type ProverbRelation = 'follows' | 'pattern' | 'state' | 'violates'
 
@@ -22,7 +22,7 @@ type ProverbMatcher = (
   move: Move,
   before: ImmutablePosition,
   after: ImmutablePosition,
-  techniques: readonly TechniqueTemplate[],
+  techniques: readonly TechniqueMatcher[],
 ) => boolean
 
 export interface ProverbPattern {
@@ -95,7 +95,7 @@ export function detectProverbsAtMove(
   move: Move,
   before: ImmutablePosition,
   after: ImmutablePosition,
-  techniques: readonly TechniqueTemplate[] = detectTechniquesAtMove(move, before, after),
+  techniques: readonly TechniqueMatcher[] = detectTechniquesAtMove(move, before, after),
 ): ProverbPattern[] {
   return KNOWN_PROVERBS.filter((pattern) => pattern.matches(move, before, after, techniques))
 }

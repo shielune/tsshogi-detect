@@ -8,7 +8,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { extractGrid, replaceCellToken, replaceCellTokens } from '../src/grid-text.ts'
-import { parseTemplateFile } from '../src/parser.ts'
+import { parseDefinitionFile } from '../src/parser.ts'
 
 const ASSETS = join(import.meta.dir, '../data')
 
@@ -19,13 +19,13 @@ function withGrid(header: string, grid: string = GRID9): string {
 }
 
 /**
- * txt からテンプレ 1 件分の原文を切り出す (formation-source.ts の sliceSource と同じ)。
+ * txt から定義 1 件分の原文を切り出す (formation-source.ts の sliceSource と同じ)。
  * `category: true` の節は盤を持たない (パーサがグリッド行を禁じている) ので外す。
  */
 function sections(file: string): string[] {
   const content = readFileSync(join(ASSETS, file), 'utf8')
   const lines = content.split('\n')
-  return parseTemplateFile(content)
+  return parseDefinitionFile(content)
     .filter((parsed) => !parsed.category)
     .map(
       (parsed) =>

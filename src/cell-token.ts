@@ -3,17 +3,18 @@
 // 盤面エディタはこの型でセルを持ち、tokenFromCell で必ず「パーサが受理する
 // トークン」に落とす。つまり盤面操作が DSL を壊すことは構造的に起きない。
 //
-// 注意: anyOf / notOf / anyPiece は tsshogi-detect 側で暗黙に「自駒」文脈として
-// 判定される (requirements.ts が piece.color !== side で弾く)。つまり
-// [!GS] は「自駒の金銀でない」であり、空マスも相手駒も満たす。色を書けるのは
-// exact (大文字) と opponent (小文字) だけなので、先後の反転もその 2 つに限る。
+// 注意: anyOf / anyPiece は tsshogi-detect 側で暗黙に「自駒」文脈として判定される
+// (requirements.ts が piece.color !== side で弾く)。除外は色を書ける —
+// [!GS] は「自駒の金銀でない」で空マスも相手駒も満たし、[!r] は「相手の飛車でない」で
+// 空マスも自駒も満たす。色を書けないのは複数駒の並び [GS] だけなので、先後を反転
+// できないのもそこに限る。
 
 import type { PieceType } from 'tsshogi'
 import { SFEN_PIECES, tryParseCellToken } from './parser.ts'
 
 export type CellSide = 'own' | 'opponent'
 
-export type TemplateCell =
+export type DefinitionCell =
   | { readonly kind: 'unspecified' }
   | { readonly kind: 'empty' }
   | { readonly kind: 'anyPiece' }
@@ -47,7 +48,7 @@ export const PIECE_SFEN: ReadonlyMap<PieceType, string> = new Map(
 )
 
 /** DSL トークン 1 つをセル状態にする。解釈できなければ null。 */
-export function cellFromToken(token: string): TemplateCell | null {
+export function cellFromToken(token: string): DefinitionCell | null {
   if (token === '.') return { kind: 'unspecified' }
 
   const parsed = tryParseCellToken(token)
@@ -66,6 +67,8 @@ export function cellFromToken(token: string): TemplateCell | null {
       return { kind: 'pieces', pieces: parsed.pieceTypes, side: 'own', negated: false }
     case 'notOf':
       return { kind: 'pieces', pieces: parsed.pieceTypes, side: 'own', negated: true }
+    case 'opponentNotOf':
+      return { kind: 'pieces', pieces: parsed.pieceTypes, side: 'opponent', negated: true }
     case 'pieceInSquares':
       return { kind: 'orPieces', pieces: parsed.pieceTypes, side: 'own' }
     case 'opponentInSquares':
@@ -77,10 +80,10 @@ export function cellFromToken(token: string): TemplateCell | null {
 }
 
 /**
- * 相手駒は 1 駒・非否定しか書けないので、はみ出した組み合わせを矯正する。
+ * 相手駒を並べられるのは除外 (`[!gs]`) だけなので、はみ出した組み合わせを矯正する。
  * 駒を 1 つも選んでいない状態は「無指定」に落とす。
  */
-export function normalizeCell(cell: TemplateCell): TemplateCell {
+export function normalizeCell(cell: DefinitionCell): DefinitionCell {
   if (cell.kind === 'orPieces') {
     const first = cell.pieces[0]
     if (first === undefined) return { kind: 'unspecified' }
@@ -93,14 +96,14 @@ export function normalizeCell(cell: TemplateCell): TemplateCell {
   if (cell.kind !== 'pieces') return cell
   const first = cell.pieces[0]
   if (first === undefined) return { kind: 'unspecified' }
-  if (cell.side === 'opponent' && (cell.pieces.length > 1 || cell.negated)) {
+  if (cell.side === 'opponent' && !cell.negated && cell.pieces.length > 1) {
     return { kind: 'pieces', pieces: [first], side: 'opponent', negated: false }
   }
   return cell
 }
 
 /** セル状態を DSL トークンにする。出力は必ず cellFromToken が受理する。 */
-export function tokenFromCell(cell: TemplateCell): string {
+export function tokenFromCell(cell: DefinitionCell): string {
   const normalized = normalizeCell(cell)
   switch (normalized.kind) {
     case 'unspecified':
@@ -111,8 +114,11 @@ export function tokenFromCell(cell: TemplateCell): string {
       return '*'
     case 'pieces': {
       const sfens = normalized.pieces.map((piece) => PIECE_SFEN.get(piece) ?? '')
+      if (normalized.negated) {
+        const body = sfens.join('')
+        return `[!${normalized.side === 'opponent' ? body.toLowerCase() : body}]`
+      }
       if (normalized.side === 'opponent') return (sfens[0] ?? '').toLowerCase()
-      if (normalized.negated) return `[!${sfens.join('')}]`
       if (sfens.length === 1) return sfens[0] ?? '.'
       return `[${sfens.join('')}]`
     }
@@ -126,12 +132,13 @@ export function tokenFromCell(cell: TemplateCell): string {
 }
 
 /** 先手駒 ⇔ 後手駒を入れ替える。書き分けられないセルは null。 */
-export function flipCellSide(cell: TemplateCell): TemplateCell | null {
+export function flipCellSide(cell: DefinitionCell): DefinitionCell | null {
   if (cell.kind === 'orPieces') {
     if (cell.pieces.length !== 1) return null
     return { ...cell, side: cell.side === 'own' ? 'opponent' : 'own' }
   }
   if (cell.kind !== 'pieces') return null
-  if (cell.pieces.length !== 1 || cell.negated) return null
+  // 除外は何駒でも色を書ける。並べる側は 1 駒のときだけ (`[GS]` の小文字版は無い)
+  if (!cell.negated && cell.pieces.length !== 1) return null
   return { ...cell, side: cell.side === 'own' ? 'opponent' : 'own' }
 }
