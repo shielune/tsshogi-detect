@@ -1,4 +1,4 @@
-// テンプレ DSL パーサの中間表現 (PlacementCell 等) と、複数のパース用ファイルが
+// 定義 DSL パーサの中間表現 (PlacementCell 等) と、複数のパース用ファイルが
 // 共有する小さなユーティリティ。
 //
 // parser.ts の分割の一部。セルトークンの解析は parser-cell-token.ts、`finish:` の
@@ -6,15 +6,15 @@
 // 分けてあり、このファイルはどれにも属さない土台 (型・SFEN トークン表・数値検証) を持つ。
 
 import { PieceType } from 'tsshogi'
-import type { BishopExchange, FormationSide, TemplateFinishCapture, TemplateSquare } from './template.ts'
+import type { BishopExchange, FormationSide, DefinitionFinishCapture, DefinitionSquare } from './definition.ts'
 
-export class TemplateSyntaxError extends Error {
+export class DefinitionSyntaxError extends Error {
   /** エラーの起きた行番号 (1 始まり)。 */
   readonly line: number
 
   constructor(message: string, line: number) {
     super(`line ${line}: ${message}`)
-    this.name = 'TemplateSyntaxError'
+    this.name = 'DefinitionSyntaxError'
     this.line = line
   }
 }
@@ -51,7 +51,7 @@ export type PlacementCell = {
    * OR だけは 1 セル = 1 要件が崩れる (同じ駒指定の `?` セルが 1 件にまとまる) ので、
    * 升は file/rank ではなくここに並ぶ。
    */
-  readonly squares: readonly TemplateSquare[]
+  readonly squares: readonly DefinitionSquare[]
 }
 
 /**
@@ -59,18 +59,18 @@ export type PlacementCell = {
  * (着地升だけを縛る、`finish:` 本来の形)。
  */
 export type ParsedFinishMove = {
-  readonly from: TemplateSquare | null
-  readonly to: TemplateSquare
+  readonly from: DefinitionSquare | null
+  readonly to: DefinitionSquare
   /** 取った駒の指定 (`x R` / `x *` / `x _`)。null なら問わない。 */
-  readonly capture: TemplateFinishCapture | null
+  readonly capture: DefinitionFinishCapture | null
   /** 成った手に限るか (`3 3 +`)。false なら成/不成を問わない。 */
   readonly promote: boolean
   /** 打った手に限るか (`3 3 打`)。false なら打ちも盤上の手も当たる。 */
   readonly drop: boolean
 }
 
-/** パース結果の 1 テンプレ。 */
-export type ParsedTemplate = {
+/** パース結果の 1 定義。 */
+export type ParsedDefinition = {
   readonly name: string
   readonly parent: string | null
   readonly aliases: readonly string[]

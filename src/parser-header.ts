@@ -1,21 +1,21 @@
-// テンプレ DSL のヘッダ行 (`parent:` `side:` `ply:` `board:` …) の解析と、
+// 定義 DSL のヘッダ行 (`parent:` `side:` `ply:` `board:` …) の解析と、
 // パース中の 1 セクションが持つ状態。parser.ts の分割の一部。
 
 import type { PieceType } from 'tsshogi'
-import { cell, isDigits, type ParsedFinishMove, type PlacementCell, TemplateSyntaxError } from './parser-types.ts'
+import { cell, isDigits, type ParsedFinishMove, type PlacementCell, DefinitionSyntaxError } from './parser-types.ts'
 import { pieceTypeOf } from './parser-cell-token.ts'
 import { parseFinishHeader } from './parser-finish.ts'
-import type { BishopExchange, FormationSide } from './template.ts'
+import type { BishopExchange, FormationSide } from './definition.ts'
 
 function parseHeaderLine(line: string, lineNo: number): { key: string; value: string } {
   const idx = line.indexOf(':')
   if (idx < 0) {
-    throw new TemplateSyntaxError(`expected "key: value", got "${line}"`, lineNo)
+    throw new DefinitionSyntaxError(`expected "key: value", got "${line}"`, lineNo)
   }
   const key = line.slice(0, idx).trim()
   const value = line.slice(idx + 1).trim()
   if (key === '') {
-    throw new TemplateSyntaxError(`empty key in "${line}"`, lineNo)
+    throw new DefinitionSyntaxError(`empty key in "${line}"`, lineNo)
   }
   return { key, value }
 }
@@ -36,18 +36,18 @@ function parsePlyHeader(
     if (part.startsWith('max')) {
       const num = part.slice(3).trim()
       if (!isDigits(num)) {
-        throw new TemplateSyntaxError(`invalid ply max value "${part}"`, lineNo)
+        throw new DefinitionSyntaxError(`invalid ply max value "${part}"`, lineNo)
       }
       result.max = Number(num)
     } else if (part.startsWith('min')) {
       const num = part.slice(3).trim()
       if (!isDigits(num)) {
-        throw new TemplateSyntaxError(`invalid ply min value "${part}"`, lineNo)
+        throw new DefinitionSyntaxError(`invalid ply min value "${part}"`, lineNo)
       }
       result.min = Number(num)
     } else {
       if (!isDigits(part)) {
-        throw new TemplateSyntaxError(`invalid ply eq value "${part}"`, lineNo)
+        throw new DefinitionSyntaxError(`invalid ply eq value "${part}"`, lineNo)
       }
       result.eq = Number(part)
     }
@@ -63,7 +63,7 @@ function parsePriorityHeader(value: string, lineNo: number): number {
   const trimmed = value.trim()
   const digits = trimmed.startsWith('-') ? trimmed.slice(1) : trimmed
   if (!isDigits(digits)) {
-    throw new TemplateSyntaxError(`priority must be an integer, got "${value}"`, lineNo)
+    throw new DefinitionSyntaxError(`priority must be an integer, got "${value}"`, lineNo)
   }
   return Number(trimmed)
 }
@@ -83,19 +83,19 @@ function parseCoordHeader(
     rankToken === undefined ||
     rest.length > 0
   ) {
-    throw new TemplateSyntaxError(
+    throw new DefinitionSyntaxError(
       `expected "${key}: <piece> <file> <rank>", got "${value}"`,
       lineNo,
     )
   }
   const piece = pieceTypeOf(pieceToken, lineNo)
   if (!isDigits(fileToken) || !isDigits(rankToken)) {
-    throw new TemplateSyntaxError(`invalid coordinates in "${key}: ${value}"`, lineNo)
+    throw new DefinitionSyntaxError(`invalid coordinates in "${key}: ${value}"`, lineNo)
   }
   const file = Number(fileToken)
   const rank = Number(rankToken)
   if (file < 1 || file > 9 || rank < 1 || rank > 9) {
-    throw new TemplateSyntaxError(`invalid coordinates in "${key}: ${value}"`, lineNo)
+    throw new DefinitionSyntaxError(`invalid coordinates in "${key}: ${value}"`, lineNo)
   }
   return { piece, file, rank }
 }
@@ -104,7 +104,7 @@ function parseBoolHeader(value: string, lineNo: number, key: string): boolean {
   const trimmed = value.trim()
   if (trimmed === 'true') return true
   if (trimmed === 'false') return false
-  throw new TemplateSyntaxError(`${key} must be "true" or "false", got "${value}"`, lineNo)
+  throw new DefinitionSyntaxError(`${key} must be "true" or "false", got "${value}"`, lineNo)
 }
 
 /**
@@ -117,7 +117,7 @@ function parseBishopExchangeHeader(value: string, lineNo: number): BishopExchang
   const trimmed = value.trim()
   if (trimmed === 'self' || trimmed === 'opponent' || trimmed === 'any') return trimmed
   if (trimmed === 'true') return 'any'
-  throw new TemplateSyntaxError(
+  throw new DefinitionSyntaxError(
     `bishop_exchange must be "self", "opponent" or "any", got "${value}"`,
     lineNo,
   )
@@ -191,14 +191,14 @@ export const CATEGORY_FORBIDDEN: ReadonlySet<string> = new Set([
 export function checkCategorySection(section: Section): void {
   const offending = section.conditionHeaders[0]
   if (offending !== undefined) {
-    throw new TemplateSyntaxError(
+    throw new DefinitionSyntaxError(
       `section "${section.name}": "${offending.key}" cannot be used with "category: true"`,
       offending.line,
     )
   }
   const firstRow = section.gridRows[0]
   if (firstRow !== undefined) {
-    throw new TemplateSyntaxError(
+    throw new DefinitionSyntaxError(
       `section "${section.name}": "category: true" takes no grid rows, got ${section.gridRows.length}`,
       firstRow.line,
     )
@@ -216,7 +216,7 @@ export function applyHeader(section: Section, key: string, value: string, lineNo
       .filter((s) => s !== '')
   } else if (key === 'side') {
     if (value !== 'ibisha' && value !== 'furibisha' && value !== 'either') {
-      throw new TemplateSyntaxError(`side must be ibisha|furibisha|either, got "${value}"`, lineNo)
+      throw new DefinitionSyntaxError(`side must be ibisha|furibisha|either, got "${value}"`, lineNo)
     }
     section.side = value
   } else if (key === 'board') {
@@ -230,7 +230,7 @@ export function applyHeader(section: Section, key: string, value: string, lineNo
       const pieceToken = starIdx < 0 ? token : token.slice(0, starIdx)
       const num = starIdx < 0 ? '1' : token.slice(starIdx + 1)
       if (!isDigits(num) || Number(num) < 1) {
-        throw new TemplateSyntaxError(`invalid hand count in "${token}"`, lineNo)
+        throw new DefinitionSyntaxError(`invalid hand count in "${token}"`, lineNo)
       }
       section.extras.push(
         cell('handPiece', { pieceTypes: [pieceTypeOf(pieceToken, lineNo)], minCount: Number(num) }),
@@ -274,7 +274,7 @@ export function applyHeader(section: Section, key: string, value: string, lineNo
     // 角交換の有無。仕掛けた側まで縛れる。no_drop と同じく履歴が要る。
     section.bishopExchange = parseBishopExchangeHeader(value, lineNo)
   } else {
-    throw new TemplateSyntaxError(`unknown header "${key}"`, lineNo)
+    throw new DefinitionSyntaxError(`unknown header "${key}"`, lineNo)
   }
 }
 

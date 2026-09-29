@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Color, type Move, Record as ShogiRecord } from 'tsshogi'
 import { detectCastles, findCastle, KNOWN_CASTLES, recordCastles } from '../src/castle.ts'
-import { hasHistoryRequirement, hasPlyConstraint, matchesTemplate } from '../src/match.ts'
+import { hasHistoryRequirement, hasPlyConstraint, matchesDefinition } from '../src/match.ts'
 
 /** 実戦の序盤 30 手。28 手目に後手の片美濃囲いが成立する。 */
 const MOVES =
@@ -19,7 +19,7 @@ function play(usiMoves: string): { record: ShogiRecord; moves: Move[] } {
   return { record, moves }
 }
 
-describe('テンプレート', () => {
+describe('定義', () => {
   test('assets/shogi/castles.txt の全件が載っている', () => {
     expect(KNOWN_CASTLES.length).toBe(113)
   })
@@ -30,15 +30,15 @@ describe('テンプレート', () => {
   })
 
   test('要件は先手視点で持つ', () => {
-    const template = findCastle('金矢倉')
-    expect(template?.placements.length).toBe(7)
+    const definition = findCastle('金矢倉')
+    expect(definition?.placements.length).toBe(7)
   })
 })
 
 describe('detectCastles', () => {
   test('局面から囲いを検出する', () => {
     const { record } = play(MOVES)
-    const names = detectCastles(record.position).map((d) => `${d.template.name}/${d.side}`)
+    const names = detectCastles(record.position).map((d) => `${d.definition.name}/${d.side}`)
     expect(names).toEqual(['片美濃囲い/white'])
   })
 
@@ -48,12 +48,12 @@ describe('detectCastles', () => {
     expect(detectCastles(record.position, Color.WHITE)).toHaveLength(1)
   })
 
-  test('ply 制約付きと game-end 評価のテンプレは検出対象外', () => {
+  test('ply 制約付きと game-end 評価の定義は検出対象外', () => {
     const { record } = play(MOVES)
     const detected = detectCastles(record.position)
-    for (const { template } of detected) {
-      expect(hasPlyConstraint(template)).toBe(false)
-      expect(template.evaluateAtGameEnd ?? false).toBe(false)
+    for (const { definition } of detected) {
+      expect(hasPlyConstraint(definition)).toBe(false)
+      expect(definition.evaluateAtGameEnd ?? false).toBe(false)
     }
   })
 
@@ -61,8 +61,8 @@ describe('detectCastles', () => {
     const { record } = play(MOVES)
     const historyBound = KNOWN_CASTLES.filter(hasHistoryRequirement)
     expect(historyBound.length).toBeGreaterThan(0)
-    for (const template of historyBound) {
-      expect(matchesTemplate(record.position, template, Color.BLACK)).toBe(false)
+    for (const definition of historyBound) {
+      expect(matchesDefinition(record.position, definition, Color.BLACK)).toBe(false)
     }
   })
 })
@@ -71,14 +71,14 @@ describe('recordCastles', () => {
   test('初めて成立した手数を返す', () => {
     const { moves } = play(MOVES)
     const detected = recordCastles(moves)
-    expect(detected.map((d) => `${d.template.name}/${d.side}@${d.ply}`)).toEqual([
+    expect(detected.map((d) => `${d.definition.name}/${d.side}@${d.ply}`)).toEqual([
       '片美濃囲い/white@28',
     ])
   })
 
   test('同じ囲いは最初の 1 回だけ報告する', () => {
     const { moves } = play(MOVES)
-    const keys = recordCastles(moves).map((d) => `${d.template.name}|${d.side}`)
+    const keys = recordCastles(moves).map((d) => `${d.definition.name}|${d.side}`)
     expect(new Set(keys).size).toBe(keys.length)
   })
 

@@ -1,8 +1,8 @@
-// テンプレ DSL のセルトークン (`.` `_` `*` `K` `+P` `[GS]` `[!GS]` `?r` …) 1 つ分の
+// 定義 DSL のセルトークン (`.` `_` `*` `K` `+P` `[GS]` `[!GS]` `?r` …) 1 つ分の
 // 解析。parser.ts の分割の一部で、盤面グリッドの 1 マスをどう読むかだけを持つ。
 
 import type { PieceType } from 'tsshogi'
-import { SFEN_PIECES, type PlacementKind, TemplateSyntaxError } from './parser-types.ts'
+import { SFEN_PIECES, type PlacementKind, DefinitionSyntaxError } from './parser-types.ts'
 
 const SFEN_TOKEN_TO_PIECE: ReadonlyMap<string, PieceType> = new Map(
   SFEN_PIECES.flatMap(([token, piece]): (readonly [string, PieceType])[] => [
@@ -14,7 +14,7 @@ const SFEN_TOKEN_TO_PIECE: ReadonlyMap<string, PieceType> = new Map(
 function pieceTypeOf(token: string, line: number): PieceType {
   const piece = SFEN_TOKEN_TO_PIECE.get(token)
   if (piece === undefined) {
-    throw new TemplateSyntaxError(`unknown piece token: "${token}"`, line)
+    throw new DefinitionSyntaxError(`unknown piece token: "${token}"`, line)
   }
   return piece
 }
@@ -38,7 +38,7 @@ function tokenizeAlternation(inner: string, lineNo: number): string[] {
     out.push(c)
   }
   if (pending.plus) {
-    throw new TemplateSyntaxError(`dangling "+" in alternation "[${inner}]"`, lineNo)
+    throw new DefinitionSyntaxError(`dangling "+" in alternation "[${inner}]"`, lineNo)
   }
   return out
 }
@@ -68,7 +68,7 @@ function parseOrCellToken(
   const inner = token.slice(1)
   const where = `section "${section}" row ${row}`
   if (inner === '') {
-    throw new TemplateSyntaxError(`${where}: "?" needs a piece (e.g. "?r" or "?[RB]")`, lineNo)
+    throw new DefinitionSyntaxError(`${where}: "?" needs a piece (e.g. "?r" or "?[RB]")`, lineNo)
   }
   const parsed = parseCellToken(inner, section, row, lineNo)
   if (parsed.kind === 'exact' || parsed.kind === 'anyOf') {
@@ -77,7 +77,7 @@ function parseOrCellToken(
   if (parsed.kind === 'opponent') {
     return { kind: 'opponentInSquares', pieceTypes: parsed.pieceTypes }
   }
-  throw new TemplateSyntaxError(
+  throw new DefinitionSyntaxError(
     `${where}: "?" takes a piece, not "${inner}" (a negated or empty OR matches almost any position)`,
     lineNo,
   )
@@ -94,14 +94,14 @@ function parseCellToken(
   if (token.startsWith('?')) return parseOrCellToken(token, section, row, lineNo)
   if (token.startsWith('[')) {
     if (!token.endsWith(']')) {
-      throw new TemplateSyntaxError(
+      throw new DefinitionSyntaxError(
         `section "${section}" row ${row}: unterminated alternation: "${token}"`,
         lineNo,
       )
     }
     const inner = token.slice(1, -1)
     if (inner === '') {
-      throw new TemplateSyntaxError(
+      throw new DefinitionSyntaxError(
         `section "${section}" row ${row}: empty alternation "[]"`,
         lineNo,
       )
@@ -109,14 +109,14 @@ function parseCellToken(
     const negated = inner.startsWith('!')
     const body = negated ? inner.slice(1) : inner
     if (body === '') {
-      throw new TemplateSyntaxError(
+      throw new DefinitionSyntaxError(
         `section "${section}" row ${row}: empty exclusion in "[!]"`,
         lineNo,
       )
     }
     const pieces = tokenizeAlternation(body, lineNo).map((t) => pieceTypeOf(t, lineNo))
     if (pieces.length === 0) {
-      throw new TemplateSyntaxError(
+      throw new DefinitionSyntaxError(
         `section "${section}" row ${row}: empty alternation in "${token}"`,
         lineNo,
       )
@@ -145,7 +145,7 @@ export function tryParseCellToken(token: string): CellTokenParse | null {
   try {
     return parseCellToken(token, '', 0, 0)
   } catch (error) {
-    if (error instanceof TemplateSyntaxError) return null
+    if (error instanceof DefinitionSyntaxError) return null
     throw error
   }
 }

@@ -8,11 +8,11 @@ import {
   normalizeCell,
   PIECE_ORDER,
   PIECE_SFEN,
-  type TemplateCell,
+  type DefinitionCell,
   tokenFromCell,
 } from '../src/cell-token.ts'
 import { extractGrid } from '../src/grid-text.ts'
-import { parseTemplateFile } from '../src/parser.ts'
+import { parseDefinitionFile } from '../src/parser.ts'
 
 const ASSETS = join(import.meta.dir, '../data')
 const FILES = ['castles.txt', 'strategies.txt'] as const
@@ -248,9 +248,9 @@ describe('生成物の合法性', () => {
   const SIDES = ['own', 'opponent'] as const
 
   test('全組み合わせで、生成したトークンがパーサを通る', () => {
-    const cells: TemplateCell[] = PIECE_ORDER.flatMap((piece, index) =>
+    const cells: DefinitionCell[] = PIECE_ORDER.flatMap((piece, index) =>
       SIDES.flatMap((side) =>
-        [false, true].map((negated): TemplateCell => {
+        [false, true].map((negated): DefinitionCell => {
           const second = PIECE_ORDER[(index + 1) % PIECE_ORDER.length]
           const third = PIECE_ORDER[(index + 2) % PIECE_ORDER.length]
           const pieces = [piece, second, third].filter((p) => p !== undefined)
@@ -260,7 +260,7 @@ describe('生成物の合法性', () => {
     )
 
     // OR も同じ組み合わせで回す (相手駒 x 複数駒は normalizeCell が詰める)
-    const orCells: TemplateCell[] = cells.flatMap((cell) =>
+    const orCells: DefinitionCell[] = cells.flatMap((cell) =>
       cell.kind === 'pieces' && !cell.negated
         ? [{ kind: 'orPieces', pieces: cell.pieces, side: cell.side }]
         : [],
@@ -281,7 +281,7 @@ describe('生成物の合法性', () => {
       // グリッドに埋めてもパーサが例外を投げない。
       const row = [token, ...Array.from({ length: 8 }, () => '.')].join(' ')
       const dsl = ['=== name: テスト', ...Array.from({ length: 9 }, () => row)].join('\n')
-      expect(() => parseTemplateFile(dsl)).not.toThrow()
+      expect(() => parseDefinitionFile(dsl)).not.toThrow()
     }
   })
 
@@ -302,13 +302,13 @@ describe('全定義でパーサとの一致 (ドリフト検知)', () => {
   test.each([...FILES])('%s', (file) => {
     const content = readFileSync(join(ASSETS, file), 'utf8')
     const lines = content.split('\n')
-    const parsed = parseTemplateFile(content)
+    const parsed = parseDefinitionFile(content)
     expect(parsed.length).toBeGreaterThan(0)
 
-    for (const template of parsed) {
+    for (const definition of parsed) {
       // 盤の形を持たない分類の節 (category: true) はグリッドが無いので比べるものが無い。
-      if (template.category) continue
-      const source = lines.slice(template.sourceStartLine - 1, template.sourceEndLine).join('\n')
+      if (definition.category) continue
+      const source = lines.slice(definition.sourceStartLine - 1, definition.sourceEndLine).join('\n')
       const extraction = extractGrid(source)
       expect(extraction.ok).toBe(true)
       if (!extraction.ok) continue
@@ -340,7 +340,7 @@ describe('全定義でパーサとの一致 (ドリフト検知)', () => {
         .filter((entry) => entry !== null)
         .sort()
 
-      const theirs = template.placements
+      const theirs = definition.placements
         .filter((placement) => GRID_KINDS.has(placement.kind))
         .map(
           (placement) =>
@@ -363,7 +363,7 @@ describe('全定義でパーサとの一致 (ドリフト検知)', () => {
       }
 
       const orTheirs = new Map(
-        template.placements
+        definition.placements
           .filter(
             (placement) =>
               placement.kind === 'pieceInSquares' || placement.kind === 'opponentInSquares',

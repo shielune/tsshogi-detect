@@ -1,9 +1,9 @@
-// テンプレパーサ — ヘッダ系のテスト。parser.test.ts が 629 行あったため分割した 1 本
+// 定義パーサ — ヘッダ系のテスト。parser.test.ts が 629 行あったため分割した 1 本
 // (finish: ヘッダだけは parser-finish.test.ts へ、さらに別に切り出してある)。
 
 import { describe, expect, test } from 'bun:test'
 import { PieceType } from 'tsshogi'
-import { type PlacementCell, type PlacementKind, parseTemplateFile } from '../src/parser.ts'
+import { type PlacementCell, type PlacementKind, parseDefinitionFile } from '../src/parser.ts'
 
 const EMPTY_ROW = '. . . . . . . . .'
 
@@ -14,9 +14,9 @@ function grid(...rows: string[]): string {
 }
 
 function one(text: string): readonly PlacementCell[] {
-  const templates = parseTemplateFile(text)
-  expect(templates).toHaveLength(1)
-  const first = templates[0]
+  const definitions = parseDefinitionFile(text)
+  expect(definitions).toHaveLength(1)
+  const first = definitions[0]
   if (first === undefined) throw new Error('unreachable')
   return first.placements
 }
@@ -60,42 +60,42 @@ describe('headers', () => {
 
   test('ply eq', () => {
     const text = `=== name: p\nply: 3\n\n${grid('. K . . . . . . .')}`
-    const t = parseTemplateFile(text)[0]
+    const t = parseDefinitionFile(text)[0]
     expect([t?.plyEq, t?.plyMax]).toEqual([3, null])
   })
 
   test('ply max', () => {
     const text = `=== name: p\nply: max 10\n\n${grid('. K . . . . . . .')}`
-    const t = parseTemplateFile(text)[0]
+    const t = parseDefinitionFile(text)[0]
     expect([t?.plyEq, t?.plyMax]).toEqual([null, 10])
   })
 
   test('ply eq and max', () => {
     const text = `=== name: p\nply: 3, max 10\n\n${grid('. K . . . . . . .')}`
-    const t = parseTemplateFile(text)[0]
+    const t = parseDefinitionFile(text)[0]
     expect([t?.plyEq, t?.plyMax]).toEqual([3, 10])
   })
 
   test('ply min', () => {
     const text = `=== name: p\nply: min 5\n\n${grid('. K . . . . . . .')}`
-    const t = parseTemplateFile(text)[0]
+    const t = parseDefinitionFile(text)[0]
     expect([t?.plyEq, t?.plyMin, t?.plyMax]).toEqual([null, 5, null])
   })
 
   test('ply min and max', () => {
     const text = `=== name: p\nply: min 5, max 10\n\n${grid('. K . . . . . . .')}`
-    const t = parseTemplateFile(text)[0]
+    const t = parseDefinitionFile(text)[0]
     expect([t?.plyEq, t?.plyMin, t?.plyMax]).toEqual([null, 5, 10])
   })
 
   test('ply min が数値でなければ落ちる', () => {
     const text = `=== name: p\nply: min x\n\n${grid('. K . . . . . . .')}`
-    expect(() => parseTemplateFile(text)).toThrow('invalid ply min value')
+    expect(() => parseDefinitionFile(text)).toThrow('invalid ply min value')
   })
 
   test('no ply header means both null', () => {
     const text = `=== name: p\n${grid('. K . . . . . . .')}`
-    const t = parseTemplateFile(text)[0]
+    const t = parseDefinitionFile(text)[0]
     expect([t?.plyEq, t?.plyMin, t?.plyMax]).toEqual([null, null, null])
   })
 
@@ -116,27 +116,27 @@ describe('headers', () => {
 
   test('igyoku header sets evaluateAtGameEnd', () => {
     const text = `=== name: i\nigyoku: true\n\n${grid('. K . . . . . . .')}`
-    const t = parseTemplateFile(text)[0]
+    const t = parseDefinitionFile(text)[0]
     expect(t?.evaluateAtGameEnd).toBe(true)
     expect(t?.placements.some((c) => c.kind === 'kingIgyoku')).toBe(true)
   })
 
   test('no_drop header', () => {
     const text = `=== name: n\nno_drop: true\n\n${grid('. K . . . . . . .')}`
-    expect(parseTemplateFile(text)[0]?.noDrop).toBe(true)
+    expect(parseDefinitionFile(text)[0]?.noDrop).toBe(true)
     // 書かなければ既定は false (これまでどおり打っても成立する)
-    expect(parseTemplateFile(`=== name: n\n\n${grid('. K . . . . . . .')}`)[0]?.noDrop).toBe(false)
+    expect(parseDefinitionFile(`=== name: n\n\n${grid('. K . . . . . . .')}`)[0]?.noDrop).toBe(false)
   })
 
   test('priority header', () => {
     const of = (line: string) =>
-      parseTemplateFile(`=== name: n\n${line}\n\n${grid('. K . . . . . . .')}`)[0]?.priority
+      parseDefinitionFile(`=== name: n\n${line}\n\n${grid('. K . . . . . . .')}`)[0]?.priority
     expect(of('priority: 100')).toBe(100)
     // 後ろへ回すために負の数も書ける
     expect(of('priority: -10')).toBe(-10)
     expect(of('priority: 0')).toBe(0)
     // 書かなければ null (= 0 と同じ扱い)
-    expect(parseTemplateFile(`=== name: n\n\n${grid('. K . . . . . . .')}`)[0]?.priority).toBe(
+    expect(parseDefinitionFile(`=== name: n\n\n${grid('. K . . . . . . .')}`)[0]?.priority).toBe(
       null,
     )
     expect(() => of('priority: 高い')).toThrow(/priority must be an integer/)
@@ -145,14 +145,14 @@ describe('headers', () => {
 
   test('priority は分類の節にも書ける', () => {
     // 成立の可否に関わらない並び順の指定なので、category とは両立する
-    const first = parseTemplateFile('=== name: 分類\ncategory: true\npriority: 50\n')[0]
+    const first = parseDefinitionFile('=== name: 分類\ncategory: true\npriority: 50\n')[0]
     expect(first?.category).toBe(true)
     expect(first?.priority).toBe(50)
   })
 
   test('bishop_exchange header', () => {
     const of = (line: string) =>
-      parseTemplateFile(`=== name: n\n${line}\n\n${grid('. K . . . . . . .')}`)[0]?.bishopExchange
+      parseDefinitionFile(`=== name: n\n${line}\n\n${grid('. K . . . . . . .')}`)[0]?.bishopExchange
     expect(of('bishop_exchange: self')).toBe('self')
     expect(of('bishop_exchange: opponent')).toBe('opponent')
     expect(of('bishop_exchange: any')).toBe('any')
@@ -160,7 +160,7 @@ describe('headers', () => {
     expect(of('bishop_exchange: true')).toBe('any')
     // 書かなければ問わない
     expect(
-      parseTemplateFile(`=== name: n\n\n${grid('. K . . . . . . .')}`)[0]?.bishopExchange,
+      parseDefinitionFile(`=== name: n\n\n${grid('. K . . . . . . .')}`)[0]?.bishopExchange,
     ).toBe(null)
     expect(() => of('bishop_exchange: mine')).toThrow(/bishop_exchange must be/)
   })
@@ -168,7 +168,7 @@ describe('headers', () => {
   test('description header is ignored', () => {
     const text = `=== name: d\ndescription: 人間向けメモ\n\n${grid('. K . . . . . . .')}`
     // 玉のみ
-    expect(parseTemplateFile(text)[0]?.placements).toHaveLength(1)
+    expect(parseDefinitionFile(text)[0]?.placements).toHaveLength(1)
   })
 })
 
@@ -176,16 +176,16 @@ describe('headers', () => {
 // 「9 行のグリッドが要る」という他のセクションの規則がそのまま反転する。
 describe('category', () => {
   test('グリッドを持たないセクションとして通る', () => {
-    const templates = parseTemplateFile('=== name: 振り飛車\ncategory: true\n')
-    expect(templates).toHaveLength(1)
-    expect(templates[0]?.category).toBe(true)
-    expect(templates[0]?.placements).toEqual([])
+    const definitions = parseDefinitionFile('=== name: 振り飛車\ncategory: true\n')
+    expect(definitions).toHaveLength(1)
+    expect(definitions[0]?.category).toBe(true)
+    expect(definitions[0]?.placements).toEqual([])
   })
 
   test('系統・別名・戦型・説明は一緒に書ける', () => {
     const text =
       '=== name: 三間飛車系\ncategory: true\nparent: 振り飛車\naliases: 三間\nside: furibisha\ndescription: めも\n'
-    const first = parseTemplateFile(text)[0]
+    const first = parseDefinitionFile(text)[0]
     expect(first?.parent).toBe('振り飛車')
     expect(first?.aliases).toEqual(['三間'])
     expect(first?.side).toBe('furibisha')
@@ -193,12 +193,12 @@ describe('category', () => {
 
   test('category: false なら普通のセクション (グリッドが要る)', () => {
     const text = `=== name: 普通\ncategory: false\n\n${grid('. K . . . . . . .')}`
-    expect(parseTemplateFile(text)[0]?.category).toBe(false)
+    expect(parseDefinitionFile(text)[0]?.category).toBe(false)
   })
 
   test('グリッドを書いたら拒否する', () => {
     const text = `=== name: 分類\ncategory: true\n\n${grid('. K . . . . . . .')}`
-    expect(() => parseTemplateFile(text)).toThrow(/takes no grid rows/)
+    expect(() => parseDefinitionFile(text)).toThrow(/takes no grid rows/)
   })
 
   test('成立条件のヘッダは拒否する', () => {
@@ -210,7 +210,7 @@ describe('category', () => {
       'board: R',
       'hand: B',
     ]) {
-      expect(() => parseTemplateFile(`=== name: 分類\ncategory: true\n${header}\n`)).toThrow(
+      expect(() => parseDefinitionFile(`=== name: 分類\ncategory: true\n${header}\n`)).toThrow(
         /cannot be used with/,
       )
     }
@@ -218,13 +218,13 @@ describe('category', () => {
 
   test('条件のヘッダを先に書いてあっても拒否する', () => {
     // `category:` は後にも書けるので、順序に依らず咎める
-    expect(() => parseTemplateFile('=== name: 分類\nply: 10\ncategory: true\n')).toThrow(
+    expect(() => parseDefinitionFile('=== name: 分類\nply: 10\ncategory: true\n')).toThrow(
       /"ply" cannot be used with/,
     )
   })
 
   test('true / false 以外は拒否する', () => {
-    expect(() => parseTemplateFile('=== name: 分類\ncategory: yes\n')).toThrow(
+    expect(() => parseDefinitionFile('=== name: 分類\ncategory: yes\n')).toThrow(
       /category must be "true" or "false"/,
     )
   })

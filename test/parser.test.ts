@@ -1,4 +1,4 @@
-// テンプレパーサ — tests/shogi/test_template_parser.py (Python 移植元) の bun:test 版。
+// 定義パーサ — tests/shogi/test_template_parser.py (Python 移植元) の bun:test 版。
 //
 // 元は parser.test.ts 1 ファイルだったが 629 行あったので、ヘッダ系 (parser-headers.test.ts) と
 // finish: ヘッダ (parser-finish.test.ts) を切り出した。ここには基本の解析・升をまたいだ OR (?X)・
@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { PieceType } from 'tsshogi'
-import { type PlacementCell, type PlacementKind, parseTemplateFile } from '../src/parser.ts'
+import { type PlacementCell, type PlacementKind, parseDefinitionFile } from '../src/parser.ts'
 
 const EMPTY_ROW = '. . . . . . . . .'
 
@@ -17,9 +17,9 @@ function grid(...rows: string[]): string {
 }
 
 function one(text: string): readonly PlacementCell[] {
-  const templates = parseTemplateFile(text)
-  expect(templates).toHaveLength(1)
-  const first = templates[0]
+  const definitions = parseDefinitionFile(text)
+  expect(definitions).toHaveLength(1)
+  const first = definitions[0]
   if (first === undefined) throw new Error('unreachable')
   return first.placements
 }
@@ -30,7 +30,7 @@ function firstOfKind(cells: readonly PlacementCell[], kind: PlacementKind): Plac
   return cell
 }
 
-describe('parseTemplateFile', () => {
+describe('parseDefinitionFile', () => {
   test('parses a single basic section', () => {
     const text = `=== name: 金矢倉
 parent: 矢倉囲い
@@ -48,9 +48,9 @@ ${grid(
   EMPTY_ROW,
 )}
 `
-    const templates = parseTemplateFile(text)
-    expect(templates).toHaveLength(1)
-    const t = templates[0]
+    const definitions = parseDefinitionFile(text)
+    expect(definitions).toHaveLength(1)
+    const t = definitions[0]
     if (t === undefined) throw new Error('unreachable')
     expect(t.name).toBe('金矢倉')
     expect(t.parent).toBe('矢倉囲い')
@@ -65,8 +65,8 @@ ${grid(
 
   test('parses multiple sections', () => {
     const text = `=== name: A\n${grid('. K . . . . . . .')}\n=== name: B\n${grid('. . K . . . . . .')}\n`
-    const templates = parseTemplateFile(text)
-    expect(templates.map((t) => t.name)).toEqual(['A', 'B'])
+    const definitions = parseDefinitionFile(text)
+    expect(definitions.map((t) => t.name)).toEqual(['A', 'B'])
   })
 
   test('handles anyOf alternation', () => {
@@ -117,7 +117,7 @@ ${grid(
 
   test('parses side header', () => {
     const text = `=== name: 中飛車\nside: furibisha\n\n${grid('. K . . . . . . .')}`
-    expect(parseTemplateFile(text)[0]?.side).toBe('furibisha')
+    expect(parseDefinitionFile(text)[0]?.side).toBe('furibisha')
   })
 
   test('skips comments and blank lines', () => {
@@ -127,9 +127,9 @@ ${grid(
 # another
 ${grid('. K . . . . . . .')}
 `
-    const templates = parseTemplateFile(text)
-    expect(templates).toHaveLength(1)
-    expect(templates[0]?.name).toBe('cmt')
+    const definitions = parseDefinitionFile(text)
+    expect(definitions).toHaveLength(1)
+    expect(definitions[0]?.name).toBe('cmt')
   })
 
   test('parses underscore as empty square', () => {
@@ -261,7 +261,7 @@ describe('升をまたいだ OR (?X)', () => {
     // どれも盤のほぼ全局面で真になるので、書けると「効かない定義」ができる
     for (const token of ['?', '?_', '?*', '?[!GS]']) {
       expect(() =>
-        parseTemplateFile(`=== name: bad\n\n${grid(`${token} . . . . . . . .`)}`),
+        parseDefinitionFile(`=== name: bad\n\n${grid(`${token} . . . . . . . .`)}`),
       ).toThrow(/\?/)
     }
   })
@@ -270,12 +270,12 @@ describe('升をまたいだ OR (?X)', () => {
 describe('errors', () => {
   test('throws on missing grid rows', () => {
     const text = `=== name: short\n${[EMPTY_ROW, '. K . . . . . . .', EMPTY_ROW].join('\n')}`
-    expect(() => parseTemplateFile(text)).toThrow()
+    expect(() => parseDefinitionFile(text)).toThrow()
   })
 
   test('throws on wrong cell count', () => {
     const rows = [...Array(7).fill(EMPTY_ROW), '. K . . . . . . .', '. . . .']
-    expect(() => parseTemplateFile(`=== name: bad\n${rows.join('\n')}`)).toThrow()
+    expect(() => parseDefinitionFile(`=== name: bad\n${rows.join('\n')}`)).toThrow()
   })
 
   test('throws on unknown piece token', () => {
@@ -289,26 +289,26 @@ describe('errors', () => {
       EMPTY_ROW,
       '. X . . . . . . .',
     )}`
-    expect(() => parseTemplateFile(text)).toThrow()
+    expect(() => parseDefinitionFile(text)).toThrow()
   })
 
   test('throws on unknown side value', () => {
     const text = `=== name: bad\nside: nonsense\n\n${grid('. K . . . . . . .')}`
-    expect(() => parseTemplateFile(text)).toThrow()
+    expect(() => parseDefinitionFile(text)).toThrow()
   })
 
   test('throws on unknown header', () => {
     const text = `=== name: bad\nnonsense: 1\n\n${grid('. K . . . . . . .')}`
-    expect(() => parseTemplateFile(text)).toThrow()
+    expect(() => parseDefinitionFile(text)).toThrow()
   })
 
   test('throws on content outside section', () => {
-    expect(() => parseTemplateFile('. K . . . . . . .\n')).toThrow()
+    expect(() => parseDefinitionFile('. K . . . . . . .\n')).toThrow()
   })
 
   test('error carries the offending line number', () => {
     // 4 行目 (1-indexed) に不正トークン
     const text = `=== name: bad\n${grid(EMPTY_ROW, EMPTY_ROW, '. X . . . . . . .')}`
-    expect(() => parseTemplateFile(text)).toThrow(/line 4/)
+    expect(() => parseDefinitionFile(text)).toThrow(/line 4/)
   })
 })

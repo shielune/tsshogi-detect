@@ -1,10 +1,10 @@
 /**
- * 2 つの版のテンプレートデータを比べ、増えた / 消えた / 定義が変わったものを並べる。
+ * 2 つの版の定義データを比べ、増えた / 消えた / 定義が変わったものを並べる。
  * リリースノートと CHANGELOG の「どの戦法が増えたか」を手で数えずに済ませるための道具。
  *
- *   bun run scripts/diff-templates.ts v0.1.0           # その版と作業ツリー
- *   bun run scripts/diff-templates.ts v0.1.0 v0.2.0    # 版どうし
- *   bun run scripts/diff-templates.ts v0.1.0 --all     # 名前を省略せず全部出す
+ *   bun run scripts/diff-definitions.ts v0.1.0           # その版と作業ツリー
+ *   bun run scripts/diff-definitions.ts v0.1.0 v0.2.0    # 版どうし
+ *   bun run scripts/diff-definitions.ts v0.1.0 --all     # 名前を省略せず全部出す
  *
  * 前の版の .gen.ts は src/ の中に一時ファイルとして展開してから読む。あそこは
  * `./requirements.ts` を相対で import していて、別の場所に置くと同じクラスが別物に
@@ -14,8 +14,8 @@
 import { execFileSync } from 'node:child_process'
 import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { TemplateRequirement } from '../src/requirements.ts'
-import type { FormationTemplate } from '../src/template.ts'
+import type { DefinitionRequirement } from '../src/requirements.ts'
+import type { FormationDefinition } from '../src/definition.ts'
 
 const SRC = join(import.meta.dir, '..', 'src')
 
@@ -31,13 +31,13 @@ type Target = (typeof TARGETS)[number]
 const LIST_LIMIT = 20
 
 /**
- * テンプレートを部位ごとに分けて文字列にする。変わったものについて「どこが」まで
+ * 定義を部位ごとに分けて文字列にする。変わったものについて「どこが」まで
  * 言えるように、1 本の指紋ではなく部位ごとに持つ。
  */
 type Facets = ReadonlyMap<string, string>
 
 /** 要件 1 件の文字列表現。クラス名を頭に付けないと、同じ升を指す別種の要件が同一に見える。 */
-function requirementKey(requirement: TemplateRequirement): string {
+function requirementKey(requirement: DefinitionRequirement): string {
   const fields = Object.entries(requirement as unknown as Record<string, unknown>)
     .filter(([, value]) => value !== undefined)
     .sort(([a], [b]) => (a < b ? -1 : 1))
@@ -45,23 +45,23 @@ function requirementKey(requirement: TemplateRequirement): string {
   return `${requirement.constructor.name}(${fields.join(',')})`
 }
 
-function facets(template: FormationTemplate): Facets {
+function facets(definition: FormationDefinition): Facets {
   const map = new Map<string, string>()
   const put = (key: string, value: unknown): void => {
     if (value === undefined) return
     map.set(key, JSON.stringify(value))
   }
-  put('別名', template.aliases)
-  put('親', template.parent)
-  put('side', template.side)
-  put('分類の節', template.category)
-  put('成立手数', [template.plyEq, template.plyMin, template.plyMax])
-  put('終局評価', template.evaluateAtGameEnd)
-  put('優先度', template.priority)
-  put('打ちの排除', template.noDrop)
-  put('角交換', template.bishopExchange)
-  put('最終手', template.finishMoves)
-  map.set('盤の形', template.placements.map(requirementKey).join(' '))
+  put('別名', definition.aliases)
+  put('親', definition.parent)
+  put('side', definition.side)
+  put('分類の節', definition.category)
+  put('成立手数', [definition.plyEq, definition.plyMin, definition.plyMax])
+  put('終局評価', definition.evaluateAtGameEnd)
+  put('優先度', definition.priority)
+  put('打ちの排除', definition.noDrop)
+  put('角交換', definition.bishopExchange)
+  put('最終手', definition.finishMoves)
+  map.set('盤の形', definition.placements.map(requirementKey).join(' '))
   return map
 }
 
@@ -110,21 +110,21 @@ function show(ref: string, path: string): string | null {
 }
 
 /**
- * ある版のテンプレート列を読む。ref を省くと作業ツリーのものをそのまま読む。
+ * ある版の定義列を読む。ref を省くと作業ツリーのものをそのまま読む。
  *
  * 一時ファイルは src/ の中にしか置けない (冒頭の注記)。名前がぶつからないよう
  * ref を混ぜ、読み終えたら必ず消す。
  */
-async function load(target: Target, ref?: string): Promise<readonly FormationTemplate[]> {
+async function load(target: Target, ref?: string): Promise<readonly FormationDefinition[]> {
   const path = ref === undefined ? join(SRC, target.file) : temporary(target, ref)
   if (path === null) return []
   try {
-    const module = (await import(path)) as Record<string, readonly FormationTemplate[]>
-    const templates = module[target.constant]
-    if (templates === undefined) {
+    const module = (await import(path)) as Record<string, readonly FormationDefinition[]>
+    const definitions = module[target.constant]
+    if (definitions === undefined) {
       throw new Error(`${target.constant} が無い (${ref ?? '作業ツリー'})`)
     }
-    return templates
+    return definitions
   } finally {
     if (ref !== undefined) rmSync(path, { force: true })
   }
@@ -140,9 +140,9 @@ function temporary(target: Target, ref: string): string | null {
   return path
 }
 
-/** 名前 → テンプレート。同名が複数あれば後勝ちだが、データ側でそれは起きない。 */
-function byName(templates: readonly FormationTemplate[]): Map<string, FormationTemplate> {
-  return new Map(templates.map((template) => [template.name, template]))
+/** 名前 → 定義。同名が複数あれば後勝ちだが、データ側でそれは起きない。 */
+function byName(definitions: readonly FormationDefinition[]): Map<string, FormationDefinition> {
+  return new Map(definitions.map((definition) => [definition.name, definition]))
 }
 
 type Diff = {
@@ -152,21 +152,21 @@ type Diff = {
 }
 
 function diff(
-  before: readonly FormationTemplate[],
-  after: readonly FormationTemplate[],
+  before: readonly FormationDefinition[],
+  after: readonly FormationDefinition[],
 ): Diff {
   const old = byName(before)
   const now = byName(after)
   const added: string[] = []
   const removed: string[] = []
   const changed: { name: string; facets: string[] }[] = []
-  for (const [name, template] of now) {
+  for (const [name, definition] of now) {
     const previous = old.get(name)
     if (previous === undefined) {
       added.push(name)
       continue
     }
-    const where = changedFacets(facets(previous), facets(template))
+    const where = changedFacets(facets(previous), facets(definition))
     if (where.length > 0) changed.push({ name, facets: where })
   }
   for (const name of old.keys()) {
@@ -208,7 +208,7 @@ const base = refs[0]
 const head = refs[1]
 
 if (base === undefined) {
-  console.error('比べる元の版が要る (例: bun run scripts/diff-templates.ts v0.1.0)')
+  console.error('比べる元の版が要る (例: bun run scripts/diff-definitions.ts v0.1.0)')
   process.exit(1)
 }
 

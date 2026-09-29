@@ -1,9 +1,9 @@
-// テンプレパーサ — finish: ヘッダ (成立を認める最終手) のテスト。
+// 定義パーサ — finish: ヘッダ (成立を認める最終手) のテスト。
 // parser.test.ts が 629 行あったため、この節だけ独立させた。
 
 import { describe, expect, test } from 'bun:test'
 import { PieceType } from 'tsshogi'
-import { parseTemplateFile } from '../src/parser.ts'
+import { parseDefinitionFile } from '../src/parser.ts'
 
 const EMPTY_ROW = '. . . . . . . . .'
 
@@ -17,28 +17,28 @@ describe('headers', () => {
   test('finish header', () => {
     const text = `=== name: f\nfinish: 3 8\n\n${grid('. K . . . . . . .')}`
     // 移動元を書かなければ着地升だけの指定 (from は null)。取った駒も書かなければ null (問わない)
-    expect(parseTemplateFile(text)[0]?.finishMoves).toEqual([
+    expect(parseDefinitionFile(text)[0]?.finishMoves).toEqual([
       { from: null, to: { file: 3, rank: 8 }, capture: null, promote: false, drop: false },
     ])
     // 複数書けばそのどれかの手 (最終手は 1 つなので OR)
     const many = `=== name: f\nfinish: 3 8, 2 8\n\n${grid('. K . . . . . . .')}`
-    expect(parseTemplateFile(many)[0]?.finishMoves).toEqual([
+    expect(parseDefinitionFile(many)[0]?.finishMoves).toEqual([
       { from: null, to: { file: 3, rank: 8 }, capture: null, promote: false, drop: false },
       { from: null, to: { file: 2, rank: 8 }, capture: null, promote: false, drop: false },
     ])
     // 書かなければ制限なし
     expect(
-      parseTemplateFile(`=== name: f\n\n${grid('. K . . . . . . .')}`)[0]?.finishMoves,
+      parseDefinitionFile(`=== name: f\n\n${grid('. K . . . . . . .')}`)[0]?.finishMoves,
     ).toEqual([])
     expect(() =>
-      parseTemplateFile(`=== name: f\nfinish: 3\n\n${grid('. K . . . . . . .')}`),
+      parseDefinitionFile(`=== name: f\nfinish: 3\n\n${grid('. K . . . . . . .')}`),
     ).toThrow()
   })
 
   test('finish header with origin square', () => {
     // `>` の左が移動元。7七から7六へ指した手でだけ成立させる
     const text = `=== name: f\nfinish: 7 7 > 7 6\n\n${grid('. K . . . . . . .')}`
-    expect(parseTemplateFile(text)[0]?.finishMoves).toEqual([
+    expect(parseDefinitionFile(text)[0]?.finishMoves).toEqual([
       {
         from: { file: 7, rank: 7 },
         to: { file: 7, rank: 6 },
@@ -49,7 +49,7 @@ describe('headers', () => {
     ])
     // 移動元あり・なしは同じ行に混ぜて書ける
     const mixed = `=== name: f\nfinish: 7 7 > 7 6, 3 8\n\n${grid('. K . . . . . . .')}`
-    expect(parseTemplateFile(mixed)[0]?.finishMoves).toEqual([
+    expect(parseDefinitionFile(mixed)[0]?.finishMoves).toEqual([
       {
         from: { file: 7, rank: 7 },
         to: { file: 7, rank: 6 },
@@ -62,14 +62,14 @@ describe('headers', () => {
     // 片側が升になっていない / `>` が 2 つ以上 / 範囲外はどれも拒否する
     for (const value of ['7 7 >', '> 7 6', '7 7 > 7 6 > 7 5', '7 7 > 0 6']) {
       expect(() =>
-        parseTemplateFile(`=== name: f\nfinish: ${value}\n\n${grid('. K . . . . . . .')}`),
+        parseDefinitionFile(`=== name: f\nfinish: ${value}\n\n${grid('. K . . . . . . .')}`),
       ).toThrow()
     }
   })
 
   test('finish header with captured piece', () => {
     const parse = (value: string) =>
-      parseTemplateFile(`=== name: f\nfinish: ${value}\n\n${grid('. K . . . . . . .')}`)[0]
+      parseDefinitionFile(`=== name: f\nfinish: ${value}\n\n${grid('. K . . . . . . .')}`)[0]
         ?.finishMoves
     // `x` の右が取った駒。駒種はその時の姿で書く (と金は `+P`)
     expect(parse('2 4 > 2 3 x P')).toEqual([
@@ -108,7 +108,7 @@ describe('headers', () => {
 
   test('finish header with promotion marker', () => {
     const parse = (value: string) =>
-      parseTemplateFile(`=== name: f\nfinish: ${value}\n\n${grid('. K . . . . . . .')}`)[0]
+      parseDefinitionFile(`=== name: f\nfinish: ${value}\n\n${grid('. K . . . . . . .')}`)[0]
         ?.finishMoves
     // 着地升の右の `+` は「成った手だけ」。盤は指した後の姿しか言えないので、
     // 角が成った手か馬が動いた手かを言い分けられるのはこの指定だけ
@@ -136,7 +136,7 @@ describe('headers', () => {
 
   test('finish header with drop marker', () => {
     const parse = (value: string) =>
-      parseTemplateFile(`=== name: f\nfinish: ${value}\n\n${grid('. K . . . . . . .')}`)[0]
+      parseDefinitionFile(`=== name: f\nfinish: ${value}\n\n${grid('. K . . . . . . .')}`)[0]
         ?.finishMoves
     // 着地升の右の `打` は「打った手だけ」。盤上を動かして同じ升へ来た手は外れる
     expect(parse('3 3 打')).toEqual([
@@ -147,7 +147,7 @@ describe('headers', () => {
     // 打ちは移動元も成りも取った駒も持たないので、どれとも混ぜて書けない
     for (const value of ['8 8 > 3 3 打', '3 3 + 打', '3 3 打 x P', '3 3 打 x _']) {
       expect(() =>
-        parseTemplateFile(`=== name: f\nfinish: ${value}\n\n${grid('. K . . . . . . .')}`),
+        parseDefinitionFile(`=== name: f\nfinish: ${value}\n\n${grid('. K . . . . . . .')}`),
       ).toThrow()
     }
   })

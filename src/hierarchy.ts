@@ -1,20 +1,20 @@
 /**
- * テンプレの系統 (`parent:`) を使った、走査のあとの絞り込み。
+ * 定義の系統 (`parent:`) を使った、走査のあとの絞り込み。
  *
  * 囲い・戦法は系統になっていて、子は親を狭めた形になっている (`美濃囲い` の親は
  * `片美濃囲い`)。ここで扱うのはその関係だけで、盤の照合には立ち入らない。
  */
 
-import type { DetectedTemplateAt, FormationTemplate } from './template.ts'
+import type { DetectedDefinitionAt, FormationDefinition } from './definition.ts'
 
 /** 名前・別名から引く索引。親は名前で書かれ、別名で書かれていることもある。 */
-function nameIndex(templates: readonly FormationTemplate[]): Map<string, FormationTemplate> {
-  const index = new Map<string, FormationTemplate>()
-  for (const template of templates) {
-    index.set(template.name, template)
+function nameIndex(definitions: readonly FormationDefinition[]): Map<string, FormationDefinition> {
+  const index = new Map<string, FormationDefinition>()
+  for (const definition of definitions) {
+    index.set(definition.name, definition)
     // 別名は本名を潰さない (同じ名前が両方にあれば本名を優先)
-    for (const alias of template.aliases ?? []) {
-      if (!index.has(alias)) index.set(alias, template)
+    for (const alias of definition.aliases ?? []) {
+      if (!index.has(alias)) index.set(alias, definition)
     }
   }
   return index
@@ -25,12 +25,12 @@ const MAX_ANCESTOR_DEPTH = 16
 
 /** 索引を使い回す版。1 局に何度も辿る側 (親ゲート) はこちらを呼ぶ。 */
 function ancestorChain(
-  template: FormationTemplate,
-  index: ReadonlyMap<string, FormationTemplate>,
-): FormationTemplate[] {
-  const chain: FormationTemplate[] = []
-  const seen = new Set<string>([template.name])
-  let parentName = template.parent
+  definition: FormationDefinition,
+  index: ReadonlyMap<string, FormationDefinition>,
+): FormationDefinition[] {
+  const chain: FormationDefinition[] = []
+  const seen = new Set<string>([definition.name])
+  let parentName = definition.parent
   for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth += 1) {
     if (parentName === undefined) break
     const parent = index.get(parentName)
@@ -45,13 +45,13 @@ function ancestorChain(
 /**
  * 直近の親から根までの系統を返す。pool に居ない親でそこで止まる。
  *
- * 1 テンプレだけを走らせるとき、親ゲートを効かせるのに一緒に走らせる分を拾うのに使う。
+ * 1 定義だけを走らせるとき、親ゲートを効かせるのに一緒に走らせる分を拾うのに使う。
  */
-export function ancestorTemplates(
-  template: FormationTemplate,
-  pool: readonly FormationTemplate[],
-): FormationTemplate[] {
-  return ancestorChain(template, nameIndex(pool))
+export function ancestorDefinitions(
+  definition: FormationDefinition,
+  pool: readonly FormationDefinition[],
+): FormationDefinition[] {
+  return ancestorChain(definition, nameIndex(pool))
 }
 
 /**
@@ -60,10 +60,10 @@ export function ancestorTemplates(
  * (ここでカテゴリを親として見ると、間に 1 つ挟んだだけで親ゲートが効かなくなる)
  */
 function gateParent(
-  template: FormationTemplate,
-  index: ReadonlyMap<string, FormationTemplate>,
-): FormationTemplate | undefined {
-  return ancestorChain(template, index).find((ancestor) => ancestor.category !== true)
+  definition: FormationDefinition,
+  index: ReadonlyMap<string, FormationDefinition>,
+): FormationDefinition | undefined {
+  return ancestorChain(definition, index).find((ancestor) => ancestor.category !== true)
 }
 
 /**
@@ -79,26 +79,26 @@ function gateParent(
  *   見る相手はその先の非カテゴリの祖先まで登る (gateParent)
  */
 export function dropUnestablishedChildren(
-  detections: readonly DetectedTemplateAt[],
-  templates: readonly FormationTemplate[],
-): DetectedTemplateAt[] {
-  if (!templates.some((template) => template.parent !== undefined)) return [...detections]
-  const index = nameIndex(templates)
-  const byKey = new Map<string, DetectedTemplateAt>()
+  detections: readonly DetectedDefinitionAt[],
+  definitions: readonly FormationDefinition[],
+): DetectedDefinitionAt[] {
+  if (!definitions.some((definition) => definition.parent !== undefined)) return [...detections]
+  const index = nameIndex(definitions)
+  const byKey = new Map<string, DetectedDefinitionAt>()
   for (const detected of detections) {
-    byKey.set(`${detected.template.name}|${detected.side}`, detected)
+    byKey.set(`${detected.definition.name}|${detected.side}`, detected)
   }
   const verdict = new Map<string, boolean>()
 
   // 系統を根まで遡る。visiting はデータ側の循環で無限に潜らないための保険
-  const isEstablished = (detected: DetectedTemplateAt, visiting: Set<string>): boolean => {
-    const key = `${detected.template.name}|${detected.side}`
+  const isEstablished = (detected: DetectedDefinitionAt, visiting: Set<string>): boolean => {
+    const key = `${detected.definition.name}|${detected.side}`
     const memo = verdict.get(key)
     if (memo !== undefined) return memo
     // 循環はそこで打ち切る (定義側の壊れなので、判定まで巻き込まない)
     if (visiting.has(key)) return true
     visiting.add(key)
-    const parent = gateParent(detected.template, index)
+    const parent = gateParent(detected.definition, index)
     const parentDetected =
       parent === undefined ? undefined : byKey.get(`${parent.name}|${detected.side}`)
     const ok =
@@ -114,21 +114,21 @@ export function dropUnestablishedChildren(
 }
 
 /**
- * テンプレごとの「上から数えた代の深さ」 — 親を辿れる代の数。
+ * 定義ごとの「上から数えた代の深さ」 — 親を辿れる代の数。
  *
  * 同じ手で 2 つ以上成立したときの並び順にだけ使う (order.ts)。検出からの距離では
- * なく**そのテンプレ自身の祖先の数**で測る。カテゴリも 1 代として数えるので、
+ * なく**その定義自身の祖先の数**で測る。カテゴリも 1 代として数えるので、
  * 分類の下にぶら下がる具体の定義は、その分類より必ず深くなる。
  *
- * 親が `templates` に居なければそこで打ち切る。系統の付いていないテンプレは 0。
+ * 親が `definitions` に居なければそこで打ち切る。系統の付いていない定義は 0。
  */
 export function ancestorDepths(
-  templates: readonly FormationTemplate[],
-): Map<FormationTemplate, number> {
-  const index = nameIndex(templates)
-  const depths = new Map<FormationTemplate, number>()
-  for (const template of templates) {
-    depths.set(template, ancestorChain(template, index).length)
+  definitions: readonly FormationDefinition[],
+): Map<FormationDefinition, number> {
+  const index = nameIndex(definitions)
+  const depths = new Map<FormationDefinition, number>()
+  for (const definition of definitions) {
+    depths.set(definition, ancestorChain(definition, index).length)
   }
   return depths
 }
