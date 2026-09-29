@@ -7,7 +7,7 @@ use crate::board::{
     rank_of,
 };
 use crate::defs::{Bishop, Capture, Catalog, Def, Finish, Req, rotate};
-use crate::scan::{MOVE_BYTES, NAIVE, Scanner, parse_output};
+use crate::scan::{FINAL_POSITION, MOVE_BYTES, NAIVE, Scanner, WITH_DROPPED, parse_output};
 
 /// xorshift64*
 struct Rng(u64);
@@ -365,6 +365,86 @@ fn incremental_matches_naive() {
     }
     // でたらめでも成り立つものが十分に出ていること
     assert!(found > 10_000, "only {found} detections");
+}
+
+/// 集まりを 1 つの走査器にまとめても、別々に走らせたときと 1 語も違わない
+#[test]
+fn a_group_matches_separate_scanners() {
+    let mut rng = Rng(0x1234_5678_9abc_def0);
+    let mut snapshots = Vec::new();
+    let games: Vec<Vec<u8>> = (0..24)
+        .map(|_| random_game(&mut rng, &mut snapshots))
+        .collect();
+    let moves: Vec<u8> = games.concat();
+    let lens: Vec<u32> = games
+        .iter()
+        .map(|game| (game.len() / MOVE_BYTES) as u32)
+        .collect();
+    let mut found = 0;
+    for round in 0..40u32 {
+        let catalogs: Vec<Catalog> = (0..1 + round % 3)
+            .map(|_| random_catalog(&mut rng, &snapshots))
+            .collect();
+        // 集まりごとに options を変える。最後の局面は最初の集まりの options で決まる
+        let options: Vec<u32> = (0..catalogs.len() as u32)
+            .map(|k| (round + 5 * k) % NAIVE)
+            .collect();
+        let mut expected = Vec::new();
+        for (catalog, &options) in catalogs.iter().zip(&options) {
+            let mut solo = Vec::new();
+            Scanner::new(catalog.clone())
+                .scan(&moves, &lens, options, &mut solo)
+                .unwrap();
+            expected.push(parse_output(&solo, games.len(), options));
+        }
+        let mut grouped = Vec::new();
+        let mut scanner = Scanner::group(catalogs.clone());
+        assert_eq!(scanner.groups(), catalogs.len());
+        scanner
+            .scan_group(&moves, &lens, &options, &mut grouped)
+            .unwrap();
+        // 出力は 局 -> (合法な手の数, 最初の集まりの最後の局面, 集まりごとの検出) の並び
+        let mut words = grouped.iter().copied();
+        let mut next = || words.next().expect("output ended early");
+        #[allow(clippy::needless_range_loop)]
+        // game は expected[k] の添字と、メッセージの両方に使う
+        for game in 0..games.len() {
+            let legal = next() as u32;
+            let first = options[0];
+            let position: Option<Vec<i32>> = (first & FINAL_POSITION != 0)
+                .then(|| (0..81 + 7 + 7 + 1).map(|_| next()).collect());
+            for (k, &options) in options.iter().enumerate() {
+                let want = &expected[k][game];
+                assert_eq!(legal, want.legal, "round {round} group {k} game {game}");
+                if k == 0 {
+                    assert_eq!(position, want.position);
+                }
+                let n = next() as usize;
+                assert_eq!(
+                    n,
+                    want.detections.len(),
+                    "round {round} group {k} game {game}"
+                );
+                for detection in &want.detections {
+                    assert_eq!(next() as u32, detection.def);
+                    assert_eq!(next() as u8, detection.side);
+                    assert_eq!(next() as u32, detection.ply);
+                }
+                found += n;
+                if options & WITH_DROPPED != 0 {
+                    let dropped = want.dropped.as_ref().unwrap();
+                    assert_eq!(next() as usize, dropped.len());
+                    for detection in dropped {
+                        assert_eq!(next() as u32, detection.def);
+                        assert_eq!(next() as u8, detection.side);
+                        assert_eq!(next() as u32, detection.ply);
+                    }
+                }
+            }
+        }
+        assert!(words.next().is_none(), "round {round}: extra words");
+    }
+    assert!(found > 1_000, "only {found} detections");
 }
 
 #[test]

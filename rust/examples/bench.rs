@@ -305,6 +305,43 @@ fn main() {
         tally.legal, tally.detections[0], tally.detections[1], hashes[0], hashes[1],
     );
 
+    // 囲いと戦法を 1 つの走査器にまとめて (盤と履歴を共有して) 回し、別々の答えと突き合わせる
+    let mut pair = Scanner::group(vec![
+        scanners[0].catalog().clone(),
+        scanners[1].catalog().clone(),
+    ]);
+    let (mut paired, mut separate_hash) = (Duration::ZERO, [FNV_OFFSET; 2]);
+    let mut out = Vec::new();
+    for from in (0..games.count()).step_by(CHUNK) {
+        let to = (from + CHUNK).min(games.count());
+        let (moves, lens) = games.slice(from, to);
+        out.clear();
+        let start = Instant::now();
+        pair.scan_group(moves, lens, &OPTIONS, &mut out)
+            .expect("scan_group が断った");
+        paired += start.elapsed();
+        // 局ごとに 合法な手の数、囲いの検出、戦法の検出
+        let mut at = 0;
+        for _ in from..to {
+            at += 1;
+            for hash in &mut separate_hash {
+                let words = 1 + 3 * out[at] as usize;
+                for &w in &out[at..at + words] {
+                    *hash = (*hash ^ w as u32).wrapping_mul(FNV_PRIME);
+                }
+                at += words;
+            }
+        }
+        assert_eq!(at, out.len());
+    }
+    println!(
+        "まとめて 1 つ: {:.4} ms/局 (別々の {:.2} 倍)  照合値 囲い {:08x} 戦法 {:08x}",
+        per_game(paired, games.count()),
+        single.as_secs_f64() / paired.as_secs_f64(),
+        separate_hash[0],
+        separate_hash[1],
+    );
+
     if args.threads > 1 {
         let (wall, parallel) = run_parallel(&scanners, &games, args.threads);
         println!(
