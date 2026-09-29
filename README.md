@@ -126,6 +126,15 @@ const detections = compiled.recordMany(usiGames, { moverOnly: true, requireParen
 compiled.release()
 ```
 
+囲いと戦法のように、名前も親子も別々に扱う 2 組を回すなら `compilePair` が速い。棋譜を 1 回
+指すだけで両方の答えが出る。組ごとに options を変えられる。
+
+```ts
+const pair = scanner.compilePair(KNOWN_CASTLES, KNOWN_STRATEGIES)
+const [castles, strategies] = pair.recordMany(usiGames, castleOptions, strategyOptions)
+pair.release()
+```
+
 棋譜は USI の文字列の列で渡し、平手から始まるものだけを扱う（`initial` は断る）。
 `UnsupportedDefinitionError` を受けたら TS 版の `recordDefinitions` に戻せばよい。
 走査器は `bun run build:wasm` で `src/wasm/scanner.gen.ts` に埋め込む（`rust/` を変えたら
