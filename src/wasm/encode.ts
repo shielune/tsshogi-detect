@@ -66,6 +66,8 @@ const REQUIREMENT_CODE = {
   unmoved: 9,
   visited: 10,
   igyoku: 11,
+  opponentHand: 12,
+  notIgyoku: 13,
 } as const
 
 const BISHOP_EXCHANGE_CODE: Readonly<Record<BishopExchange, number>> = {
@@ -173,7 +175,9 @@ export function encodeDefinitions(definitions: readonly FormationDefinition[]): 
 
     words.push(definition.placements.length)
     for (const requirement of definition.placements) {
-      words.push(...encodeRequirement(requirement, { reject, int, coord, piece, mask, color, square }))
+      words.push(
+        ...encodeRequirement(requirement, { reject, int, coord, piece, mask, color, square }),
+      )
     }
   })
   return Int32Array.from(words)
@@ -194,7 +198,10 @@ type Encoders = {
  * 照合の中身が違うかもしれないので、知っているクラス以外は断る。
  */
 function encodeRequirement(requirement: DefinitionRequirement, e: Encoders): number[] {
-  const at = (file: number, rank: number): number[] => [e.coord(file, 'file'), e.coord(rank, 'rank')]
+  const at = (file: number, rank: number): number[] => [
+    e.coord(file, 'file'),
+    e.coord(rank, 'rank'),
+  ]
   if (requirement instanceof PiecePlacement) {
     return [
       REQUIREMENT_CODE.piece,
@@ -204,7 +211,11 @@ function encodeRequirement(requirement: DefinitionRequirement, e: Encoders): num
     ]
   }
   if (requirement instanceof AnyOfPieces) {
-    return [REQUIREMENT_CODE.anyOf, ...at(requirement.file, requirement.rank), e.mask(requirement.options)]
+    return [
+      REQUIREMENT_CODE.anyOf,
+      ...at(requirement.file, requirement.rank),
+      e.mask(requirement.options),
+    ]
   }
   if (requirement instanceof EmptySquare) {
     return [REQUIREMENT_CODE.empty, ...at(requirement.file, requirement.rank)]
@@ -235,7 +246,7 @@ function encodeRequirement(requirement: DefinitionRequirement, e: Encoders): num
   if (requirement instanceof HandPiece) {
     // 枚数は負でも書ける (0 以上なら常に真)。整数でなければ比べ方が変わるので断る
     return [
-      REQUIREMENT_CODE.hand,
+      e.color(requirement.color) === 0 ? REQUIREMENT_CODE.hand : REQUIREMENT_CODE.opponentHand,
       e.piece(requirement.pieceType),
       e.int(requirement.minCount, 'hand minCount', -I32_MAX),
     ]
@@ -250,7 +261,11 @@ function encodeRequirement(requirement: DefinitionRequirement, e: Encoders): num
       e.piece(requirement.pieceType),
     ]
   }
-  if (requirement instanceof KingIgyoku) return [REQUIREMENT_CODE.igyoku]
+  if (requirement instanceof KingIgyoku) {
+    if (typeof requirement.required !== 'boolean')
+      return e.reject('igyoku required must be a boolean')
+    return [requirement.required ? REQUIREMENT_CODE.igyoku : REQUIREMENT_CODE.notIgyoku]
+  }
   return e.reject(`unknown requirement kind "${requirement.kind}"`)
 }
 
