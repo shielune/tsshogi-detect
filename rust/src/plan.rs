@@ -37,6 +37,10 @@ pub enum Extra {
         piece_type: u8,
         min: i32,
     },
+    OpponentHand {
+        piece_type: u8,
+        min: i32,
+    },
     Unmoved {
         sq: u8,
     },
@@ -45,6 +49,7 @@ pub enum Extra {
         piece_type: u8,
     },
     Igyoku,
+    NotIgyoku,
 }
 
 /// 陣営 1 つぶんの照合。升はすべて回したあとの添字
@@ -114,9 +119,13 @@ impl Plan {
             Extra::Hand { piece_type, min } => pos
                 .hand_count(side, piece_type)
                 .is_some_and(|n| i64::from(n) >= i64::from(min)),
+            Extra::OpponentHand { piece_type, min } => pos
+                .hand_count(side ^ 1, piece_type)
+                .is_some_and(|n| i64::from(n) >= i64::from(min)),
             Extra::Unmoved { sq } => h.is_unmoved(side, sq),
             Extra::Visited { sq, piece_type } => h.has_visited(side, piece_type, sq),
             Extra::Igyoku => h.igyoku(side),
+            Extra::NotIgyoku => !h.igyoku(side),
         }) && !shape.own.iter().any(|&sq| h.is_dropped(side, sq))
             && self
                 .bishop
@@ -155,6 +164,9 @@ fn shape(def: &Def, side: u8, real: bool, hirate: &[u8; 81]) -> Shape {
                 cell: cell(side, piece_type),
             }),
             Req::Hand { piece_type, min } => extras.push(Extra::Hand { piece_type, min }),
+            Req::OpponentHand { piece_type, min } => {
+                extras.push(Extra::OpponentHand { piece_type, min })
+            }
             Req::Unmoved { sq } if real => extras.push(Extra::Unmoved { sq: at(sq) }),
             Req::Visited { sq, piece_type } if real => {
                 extras.push(Extra::Visited {
@@ -163,6 +175,9 @@ fn shape(def: &Def, side: u8, real: bool, hirate: &[u8; 81]) -> Shape {
                 });
             }
             Req::Igyoku if real => extras.push(Extra::Igyoku),
+            Req::NotIgyoku if real => extras.push(Extra::NotIgyoku),
+            // 近似の履歴では常に居玉なので、その否定は満たさない。
+            Req::NotIgyoku => checks.push((0, 0)),
             // 近似の履歴: 駒は動いておらず、居玉で、居たことがあるのは初期配置か今の升
             Req::Unmoved { .. } | Req::Igyoku => {}
             Req::Visited { sq, piece_type } => {
@@ -355,6 +370,10 @@ pub struct SideIndex {
     pub by_cell: Csr,
     /// 持駒の駒種 7 → その駒を持つことを要る照合
     pub by_hand: Csr,
+    /// 相手の持駒の駒種7 → その駒を相手が持つことを要る照合
+    pub by_opponent_hand: Csr,
+    /// 自陣の玉が動くと成立しうる照合。初期配置の玉に限らない。
+    pub by_king: Csr,
     /// 升 81 → 最終手の行き先がその升の照合
     pub by_finish_to: Csr,
 }
@@ -414,6 +433,8 @@ impl Plans {
             let mut cells_at = Vec::new();
             let mut cells = Vec::new();
             let mut hands = Vec::new();
+            let mut opponent_hands = Vec::new();
+            let mut kings = Vec::new();
             let mut finish_to = Vec::new();
             for (id, plan) in plans.iter().enumerate() {
                 let id = id as u32;
@@ -446,7 +467,16 @@ impl Plans {
                         Extra::Hand { piece_type, .. } if (piece_type as usize) < HAND_TYPES => {
                             hands.push((u32::from(piece_type), id));
                         }
-                        Extra::Hand { .. } | Extra::Unmoved { .. } | Extra::Igyoku => {}
+                        Extra::OpponentHand { piece_type, .. }
+                            if (piece_type as usize) < HAND_TYPES =>
+                        {
+                            opponent_hands.push((u32::from(piece_type), id));
+                        }
+                        Extra::NotIgyoku => kings.push((0, id)),
+                        Extra::Hand { .. }
+                        | Extra::OpponentHand { .. }
+                        | Extra::Unmoved { .. }
+                        | Extra::Igyoku => {}
                     }
                 }
             }
@@ -455,6 +485,8 @@ impl Plans {
                 by_cell_at: Csr::build(81 * 32, cells_at, hi),
                 by_cell: Csr::build(32, cells, hi),
                 by_hand: Csr::build(HAND_TYPES, hands, hi),
+                by_opponent_hand: Csr::build(HAND_TYPES, opponent_hands, hi),
+                by_king: Csr::build(1, kings, hi),
                 by_finish_to: Csr::build(81, finish_to, hi),
             }
         });

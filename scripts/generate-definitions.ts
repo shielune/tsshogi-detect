@@ -130,12 +130,16 @@ function requirement(cell: PlacementCell): string {
       return `new PieceAnywhere(${solo()})`
     case 'handPiece':
       return `new HandPiece(${solo()}, ${cell.minCount})`
+    case 'opponentHandPiece':
+      return `new HandPiece(${solo()}, ${cell.minCount}, Color.WHITE)`
     case 'pieceUnmoved':
       return `new PieceUnmoved(${cell.file}, ${cell.rank})`
     case 'pieceVisited':
       return `new PieceVisited(${cell.file}, ${cell.rank}, ${solo()})`
     case 'kingIgyoku':
       return 'new KingIgyoku()'
+    case 'kingNotIgyoku':
+      return 'new KingIgyoku(false)'
     case 'pieceInSquares':
       return `new PieceInSquares(${squares(cell.squares)}, ${pieces(cell.pieceTypes)})`
     case 'opponentInSquares':

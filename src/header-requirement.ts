@@ -36,7 +36,9 @@ const REQUIREMENT_KEY: Partial<Record<PlacementKind, string>> = {
   pieceUnmoved: 'unmoved',
   pieceAnywhere: 'board',
   handPiece: 'hand',
+  opponentHandPiece: 'opponent_hand',
   kingIgyoku: 'igyoku',
+  kingNotIgyoku: 'igyoku',
 }
 
 /** その要件はヘッダに書かれているか (= グリッドではなくこの版で触るか)。 */
@@ -45,7 +47,7 @@ export function isHeaderRequirement(cell: PlacementCell): boolean {
 }
 
 /** 1 行に複数書ける鍵。こちらはトークン 1 つが要件 1 件になる。 */
-const MULTI_TOKEN: ReadonlySet<string> = new Set(['board', 'hand'])
+const MULTI_TOKEN: ReadonlySet<string> = new Set(['board', 'hand', 'opponent_hand'])
 
 const tokensOf = (value: string): string[] => value.split(/\s+/).filter((token) => token !== '')
 
@@ -78,7 +80,8 @@ function locate(dsl: string, target: PlacementCell): Spot | null {
 
 /** 行 1 本が要件 1 件の鍵で、その行が狙いの要件か。 */
 function matchesLine(key: string, tokens: readonly string[], target: PlacementCell): boolean {
-  if (key === 'igyoku') return tokens[0]?.toLowerCase() === 'true'
+  if (key === 'igyoku')
+    return tokens[0]?.toLowerCase() === (target.kind === 'kingNotIgyoku' ? 'false' : 'true')
   if (tokens.length !== 3) return false
   const square = Number(tokens[1]) === target.file && Number(tokens[2]) === target.rank
   // `unmoved:` の駒種トークンは可読性のためのもので、パーサも捨てている (升だけで引く)
@@ -92,7 +95,10 @@ function sameToken(key: string, token: string, target: PlacementCell): boolean {
   const star = token.indexOf('*')
   const piece = TOKEN_PIECE.get(star < 0 ? token : token.slice(0, star))
   if (piece !== target.pieceTypes[0]) return false
-  return key !== 'hand' || (star < 0 ? 1 : Number(token.slice(star + 1))) === target.minCount
+  return (
+    (key !== 'hand' && key !== 'opponent_hand') ||
+    (star < 0 ? 1 : Number(token.slice(star + 1))) === target.minCount
+  )
 }
 
 /**
@@ -104,7 +110,7 @@ function requirementText(cell: PlacementCell, key: string, carried?: string): st
   const token = piece === undefined ? undefined : PIECE_TOKEN.get(piece)
   switch (key) {
     case 'igyoku':
-      return 'true'
+      return cell.kind === 'kingNotIgyoku' ? 'false' : 'true'
     case 'visited':
       return token === undefined ? null : `${token} ${cell.file} ${cell.rank}`
     case 'unmoved': {
@@ -114,6 +120,7 @@ function requirementText(cell: PlacementCell, key: string, carried?: string): st
     case 'board':
       return token ?? null
     case 'hand':
+    case 'opponent_hand':
       return token === undefined ? null : `${token}${cell.minCount > 1 ? `*${cell.minCount}` : ''}`
     default:
       return null
@@ -147,7 +154,12 @@ export function updateHeaderRequirement(
   next: PlacementCell,
 ): string | null {
   const spot = locate(dsl, target)
-  if (spot === null || next.kind !== target.kind) return null
+  if (
+    spot === null ||
+    (next.kind !== target.kind &&
+      !(spot.key === 'igyoku' && REQUIREMENT_KEY[next.kind] === 'igyoku'))
+  )
+    return null
   const text = requirementText(next, spot.key, spot.token === null ? spot.tokens[0] : undefined)
   if (text === null) return null
   return writeHeaderLine(
@@ -172,6 +184,10 @@ export function addHeaderRequirement(dsl: string, next: PlacementCell): string |
   if (locate(dsl, next) !== null) return dsl
   const text = requirementText(next, key)
   if (text === null) return null
+  if (key === 'igyoku') {
+    const existing = headerLines(dsl, key)[0]
+    if (existing !== undefined) return writeHeaderLine(dsl, existing.index, key, text)
+  }
   const line = MULTI_TOKEN.has(key) ? headerLines(dsl, key)[0] : undefined
   return line === undefined
     ? insertHeaderLine(dsl, key, text)

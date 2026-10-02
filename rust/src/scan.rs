@@ -5,7 +5,7 @@
 //! 照らす。照らさない照合が成り立たないままでいる理由は plan.rs の冒頭に書いてある。
 //! options の bit 32 のときは TS 版をそのまま写した回し方 (毎手すべて照らす) にする。
 
-use crate::board::{BLACK, HAND_TYPES, Move, NO_PIECE, Position, WHITE, unpromoted};
+use crate::board::{BLACK, HAND_TYPES, KING, Move, NO_PIECE, Position, WHITE, unpromoted};
 use crate::defs::Catalog;
 use crate::history::{Approx, History, HistoryView};
 use crate::plan::{Flips, Plans};
@@ -105,6 +105,10 @@ struct Pending {
     cells: u32,
     /// 増えた持駒の駒種
     hand: u8,
+    /// 相手側で増えた持駒の駒種
+    opponent_hand: u8,
+    /// その陣営の玉が盤上で動いた
+    king: bool,
     /// 角交換を仕掛けた側が決まった
     bishop: bool,
 }
@@ -203,7 +207,11 @@ impl Member {
             let basic = unpromoted(m.captured);
             if (basic as usize) < HAND_TYPES {
                 pending[m.color as usize].hand |= 1 << basic;
+                pending[(m.color ^ 1) as usize].opponent_hand |= 1 << basic;
             }
+        }
+        if !m.is_drop() && m.piece_type == KING {
+            pending[m.color as usize].king = true;
         }
         self.emit_incremental(game, ply, m, mover_only, pending);
     }
@@ -302,6 +310,16 @@ impl Member {
             while hand != 0 {
                 add(index.by_hand.alive(hand.trailing_zeros() as usize, ply));
                 hand &= hand - 1;
+            }
+            let mut opponent_hand = p.opponent_hand;
+            while opponent_hand != 0 {
+                add(index
+                    .by_opponent_hand
+                    .alive(opponent_hand.trailing_zeros() as usize, ply));
+                opponent_hand &= opponent_hand - 1;
+            }
+            if p.king {
+                add(index.by_king.alive(0, ply));
             }
             add(&work.entered[side as usize]);
             work.entered[side as usize].clear();

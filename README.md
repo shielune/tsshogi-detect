@@ -88,6 +88,16 @@ const proverbs = detectProverbsAtMove(move, before, position, techniques)
 打って揃えた形の排除（`noDrop`）、角交換の有無と仕掛けた側（`bishopExchange`）、
 成立を認める最終手（`finishMoves`）、系統を繋ぐだけの分類の節（`category`）、
 同時に成立したときの並び順（`priority`）を指定できる。
+居玉と持駒は DSL のヘッダで指定できる。
+
+- 居玉を条件にしないときは `igyoku:` を書かない。`igyoku: true` は居玉を要求し、
+  従来どおり終局で評価する。`igyoku: false` は居玉ではないことを要求する。
+  歩・角以外が初めて取られる前に玉が動いた局面から成立する。
+- `hand: B*2 P` は判定する側の持駒、`opponent_hand: B*2 P` はその相手の持駒を要求する。
+  枚数は以上の条件で、省略すると 1 枚。先後を入れ替えても判定する側から見た相手を指す。
+- 要件オブジェクトでは `new KingIgyoku(false)` と
+  `new HandPiece(PieceType.BISHOP, 2, Color.WHITE)` がそれぞれ対応する。
+
 同梱の 2 つ以外の母集団も、`detectDefinitions` / `recordDefinitions` に自分の定義列を
 渡せばそのまま扱える。
 
