@@ -116,7 +116,12 @@ export class NotOfPieces implements DefinitionRequirement {
   /** 定義視点の絶対色。BLACK は定義自陣、WHITE は定義相手陣の駒を除外する。 */
   readonly color: Color
 
-  constructor(file: number, rank: number, excluded: readonly PieceType[], color: Color = Color.BLACK) {
+  constructor(
+    file: number,
+    rank: number,
+    excluded: readonly PieceType[],
+    color: Color = Color.BLACK,
+  ) {
     this.file = file
     this.rank = rank
     this.excluded = excluded
@@ -216,19 +221,24 @@ export class PieceAnywhere implements DefinitionRequirement {
   }
 }
 
-/** side が指定駒を持駒に minCount 枚以上持つことを要求する。 */
+/** 指定駒の持駒が minCount 枚以上あることを要求する。colorがWHITEならsideの相手を見る。 */
 export class HandPiece implements DefinitionRequirement {
   readonly kind = 'hand'
   readonly pieceType: PieceType
   readonly minCount: number
+  /** 定義視点の色。WHITEは判定する側の相手。 */
+  readonly color: Color
 
-  constructor(pieceType: PieceType, minCount = 1) {
+  constructor(pieceType: PieceType, minCount = 1, color: Color = Color.BLACK) {
     this.pieceType = pieceType
     this.minCount = minCount
+    this.color = color
   }
 
   isSatisfiedBy(position: ImmutablePosition, side: Color): boolean {
-    return position.hand(side).count(this.pieceType) >= this.minCount
+    const owner =
+      this.color === Color.BLACK ? side : side === Color.BLACK ? Color.WHITE : Color.BLACK
+    return position.hand(owner).count(this.pieceType) >= this.minCount
   }
 }
 
@@ -271,18 +281,23 @@ export class PieceVisited implements DefinitionRequirement {
 /**
  * 居玉 (bioshogi 同等)。玉が一度も動いていないか、玉の最初の移動が outbreak
  * (歩・角以外が初めて取られた手) 以降なら満たす。「戦いが始まるまで囲わなかった」
- * を含めて評価するので、この定義は game-end 評価に回す。
+ * を含めて評価するので、肯定条件は game-end 評価に回す。required=falseはその否定で、
+ * 玉が戦端より前に動いた手から満たす。
  */
 export class KingIgyoku implements DefinitionRequirement {
   readonly kind = 'igyoku'
+  readonly required: boolean
+
+  constructor(required = true) {
+    this.required = required
+  }
 
   isSatisfiedBy(_position: ImmutablePosition, side: Color, history?: MoveHistory): boolean {
     if (history === undefined) return false
     const kingMoved = history.kingFirstMovedTurn(side)
-    if (kingMoved === undefined) return true
     const outbreak = history.outbreakTurn
-    if (outbreak === undefined) return false
-    return kingMoved >= outbreak
+    const igyoku = kingMoved === undefined || (outbreak !== undefined && kingMoved >= outbreak)
+    return igyoku === this.required
   }
 }
 

@@ -63,12 +63,16 @@ function buildRequirement(placement: PlacementCell): DefinitionRequirement {
       return new PieceAnywhere(soloPiece(placement))
     case 'handPiece':
       return new HandPiece(soloPiece(placement), placement.minCount)
+    case 'opponentHandPiece':
+      return new HandPiece(soloPiece(placement), placement.minCount, Color.WHITE)
     case 'pieceUnmoved':
       return new PieceUnmoved(file, rank)
     case 'pieceVisited':
       return new PieceVisited(file, rank, soloPiece(placement))
     case 'kingIgyoku':
       return new KingIgyoku()
+    case 'kingNotIgyoku':
+      return new KingIgyoku(false)
     case 'pieceInSquares':
       return new PieceInSquares(placement.squares, placement.pieceTypes)
     case 'opponentInSquares':

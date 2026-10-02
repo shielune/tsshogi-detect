@@ -2,7 +2,13 @@
 // パース中の 1 セクションが持つ状態。parser.ts の分割の一部。
 
 import type { PieceType } from 'tsshogi'
-import { cell, isDigits, type ParsedFinishMove, type PlacementCell, DefinitionSyntaxError } from './parser-types.ts'
+import {
+  cell,
+  isDigits,
+  type ParsedFinishMove,
+  type PlacementCell,
+  DefinitionSyntaxError,
+} from './parser-types.ts'
 import { pieceTypeOf } from './parser-cell-token.ts'
 import { parseFinishHeader } from './parser-finish.ts'
 import type { BishopExchange, FormationSide } from './definition.ts'
@@ -177,6 +183,7 @@ export function newSection(): Section {
 export const CATEGORY_FORBIDDEN: ReadonlySet<string> = new Set([
   'board',
   'hand',
+  'opponent_hand',
   'ply',
   'unmoved',
   'visited',
@@ -219,14 +226,17 @@ export function applyHeader(section: Section, key: string, value: string, lineNo
       .filter((s) => s !== '')
   } else if (key === 'side') {
     if (value !== 'ibisha' && value !== 'furibisha' && value !== 'either') {
-      throw new DefinitionSyntaxError(`side must be ibisha|furibisha|either, got "${value}"`, lineNo)
+      throw new DefinitionSyntaxError(
+        `side must be ibisha|furibisha|either, got "${value}"`,
+        lineNo,
+      )
     }
     section.side = value
   } else if (key === 'board') {
     for (const token of value.split(/\s+/).filter((t) => t !== '')) {
       section.extras.push(cell('pieceAnywhere', { pieceTypes: [pieceTypeOf(token, lineNo)] }))
     }
-  } else if (key === 'hand') {
+  } else if (key === 'hand' || key === 'opponent_hand') {
     // `hand: B*2 R` → `X*N` で N 枚指定。省略時は 1 枚。
     for (const token of value.split(/\s+/).filter((t) => t !== '')) {
       const starIdx = token.indexOf('*')
@@ -236,7 +246,10 @@ export function applyHeader(section: Section, key: string, value: string, lineNo
         throw new DefinitionSyntaxError(`invalid hand count in "${token}"`, lineNo)
       }
       section.extras.push(
-        cell('handPiece', { pieceTypes: [pieceTypeOf(pieceToken, lineNo)], minCount: Number(num) }),
+        cell(key === 'hand' ? 'handPiece' : 'opponentHandPiece', {
+          pieceTypes: [pieceTypeOf(pieceToken, lineNo)],
+          minCount: Number(num),
+        }),
       )
     }
   } else if (key === 'category') {
@@ -258,10 +271,9 @@ export function applyHeader(section: Section, key: string, value: string, lineNo
     section.extras.push(cell('pieceVisited', { file, rank, pieceTypes: [piece] }))
   } else if (key === 'igyoku') {
     // igyoku: true は KingIgyoku を足しつつ evaluateAtGameEnd も立てる。
-    if (parseBoolHeader(value, lineNo, 'igyoku')) {
-      section.extras.push(cell('kingIgyoku', {}))
-      section.evaluateAtGameEnd = true
-    }
+    const required = parseBoolHeader(value, lineNo, 'igyoku')
+    section.extras.push(cell(required ? 'kingIgyoku' : 'kingNotIgyoku', {}))
+    if (required) section.evaluateAtGameEnd = true
   } else if (key === 'evaluate_at_game_end') {
     section.evaluateAtGameEnd = parseBoolHeader(value, lineNo, 'evaluate_at_game_end')
   } else if (key === 'finish') {

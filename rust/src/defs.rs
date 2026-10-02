@@ -50,6 +50,10 @@ pub enum Req {
         piece_type: u8,
         min: i32,
     },
+    OpponentHand {
+        piece_type: u8,
+        min: i32,
+    },
     Unmoved {
         sq: u8,
     },
@@ -58,6 +62,7 @@ pub enum Req {
         piece_type: u8,
     },
     Igyoku,
+    NotIgyoku,
 }
 
 const fn has_type(mask: u16, piece_type: u8) -> bool {
@@ -97,9 +102,13 @@ impl Req {
             Req::Hand { piece_type, min } => pos
                 .hand_count(side, piece_type)
                 .is_some_and(|n| i64::from(n) >= i64::from(min)),
+            Req::OpponentHand { piece_type, min } => pos
+                .hand_count(side ^ 1, piece_type)
+                .is_some_and(|n| i64::from(n) >= i64::from(min)),
             Req::Unmoved { sq } => h.is_unmoved(side, rotate(sq, side)),
             Req::Visited { sq, piece_type } => h.has_visited(side, piece_type, rotate(sq, side)),
             Req::Igyoku => h.igyoku(side),
+            Req::NotIgyoku => !h.igyoku(side),
         }
     }
 
@@ -107,7 +116,7 @@ impl Req {
     pub const fn is_history(&self) -> bool {
         matches!(
             self,
-            Req::Unmoved { .. } | Req::Visited { .. } | Req::Igyoku
+            Req::Unmoved { .. } | Req::Visited { .. } | Req::Igyoku | Req::NotIgyoku
         )
     }
 
@@ -378,7 +387,7 @@ impl Reader<'_> {
     }
 
     fn req(&mut self) -> Option<Req> {
-        Some(match self.int(1, 11)? {
+        Some(match self.int(1, 13)? {
             1 => {
                 let sq = self.square()?;
                 Req::Piece {
@@ -427,7 +436,12 @@ impl Reader<'_> {
                     piece_type: self.piece()?,
                 }
             }
-            _ => Req::Igyoku,
+            11 => Req::Igyoku,
+            12 => Req::OpponentHand {
+                piece_type: self.piece()?,
+                min: self.int(-i32::MAX, i32::MAX)?,
+            },
+            _ => Req::NotIgyoku,
         })
     }
 

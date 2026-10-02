@@ -36,14 +36,22 @@ function grid(cells: Readonly<Record<string, string>>): string {
 
 /** 節 1 つ。cells を省くと分類の節 (盤を書かない) */
 function section(name: string, headers: readonly string[], cells?: Record<string, string>): string {
-  return [`=== name: ${name}`, ...headers, '', ...(cells === undefined ? [] : [grid(cells)]), ''].join(
-    '\n',
-  )
+  return [
+    `=== name: ${name}`,
+    ...headers,
+    '',
+    ...(cells === undefined ? [] : [grid(cells)]),
+    '',
+  ].join('\n')
 }
 
 const SOURCE = [
   // 系統: 別名で書いた親・分類を挟んだ親・宙に浮いた分類・循環・同じ名前・自分が親
-  section('上がり玉', ['side: ibisha', 'description: 玉が一つ上がった'], { 58: 'K', 59: '_', 57: '*' }),
+  section('上がり玉', ['side: ibisha', 'description: 玉が一つ上がった'], {
+    58: 'K',
+    59: '_',
+    57: '*',
+  }),
   section('上がり玉の子', ['parent: 上がり玉', 'aliases: 旧上がり子, 被り'], {
     48: '[GS]',
     28: '[!R]',
@@ -94,6 +102,9 @@ const SOURCE = [
   // 持駒と盤のどこか
   section('歩三枚', ['hand: P*3 S'], {}),
   section('大駒持ち', ['hand: B R'], {}),
+  section('相手歩三枚', ['opponent_hand: P*3 S'], {}),
+  section('相手大駒持ち', ['opponent_hand: B R'], {}),
+  section('両者角持ち', ['hand: B', 'opponent_hand: B'], {}),
   section('龍', ['board: +R'], {}),
   section('馬桂', ['board: +B N'], { 55: '_' }),
 
@@ -103,6 +114,8 @@ const SOURCE = [
   section('通った玉', ['visited: K 6 8'], {}),
   section('通った龍', ['visited: +R 2 3'], {}),
   section('通った玉の手数', ['visited: K 4 8', 'ply: min 20'], {}),
+  section('居玉ではない', ['igyoku: false'], {}),
+  section('居玉ではない中盤', ['igyoku: false', 'ply: min 20'], {}),
 
   // 終局で見る
   section('居玉', ['igyoku: true'], {}),
@@ -157,12 +170,16 @@ function requirement(cell: PlacementCell): DefinitionRequirement {
       return new PieceAnywhere(one(cell))
     case 'handPiece':
       return new HandPiece(one(cell), cell.minCount)
+    case 'opponentHandPiece':
+      return new HandPiece(one(cell), cell.minCount, Color.WHITE)
     case 'pieceUnmoved':
       return new PieceUnmoved(cell.file, cell.rank)
     case 'pieceVisited':
       return new PieceVisited(cell.file, cell.rank, one(cell))
     case 'kingIgyoku':
       return new KingIgyoku()
+    case 'kingNotIgyoku':
+      return new KingIgyoku(false)
     case 'pieceInSquares':
       return new PieceInSquares(cell.squares, cell.pieceTypes)
     case 'opponentInSquares':
@@ -212,7 +229,11 @@ export const EDGE_DEFINITIONS: readonly FormationDefinition[] = [
   { name: '毎手の居玉と手数', plyMin: 3, placements: [new KingIgyoku()] },
   // 終局で見る分類。分類でも終局の判定には回る
   { name: '終局の分類', category: true, evaluateAtGameEnd: true, placements: [] },
-  { name: '分類の子の終局', parent: '終局の分類', placements: [new PiecePlacement(7, 6, PieceType.PAWN)] },
+  {
+    name: '分類の子の終局',
+    parent: '終局の分類',
+    placements: [new PiecePlacement(7, 6, PieceType.PAWN)],
+  },
   // 常に真・常に偽になる要件
   { name: '持駒ゼロ枚', placements: [new HandPiece(PieceType.ROOK, 0)] },
   { name: '持駒負の枚数', placements: [new HandPiece(PieceType.GOLD, -2)] },
@@ -233,7 +254,16 @@ export const EDGE_DEFINITIONS: readonly FormationDefinition[] = [
   {
     name: '打たずの相手の組',
     noDrop: true,
-    placements: [new PieceInSquares([{ file: 5, rank: 5 }, { file: 5, rank: 4 }], [PieceType.PAWN], Color.WHITE)],
+    placements: [
+      new PieceInSquares(
+        [
+          { file: 5, rank: 5 },
+          { file: 5, rank: 4 },
+        ],
+        [PieceType.PAWN],
+        Color.WHITE,
+      ),
+    ],
   },
   // 打ちの手で盤上の升と取った駒を同時に書く (DSL は断るが、形としては通る)
   {

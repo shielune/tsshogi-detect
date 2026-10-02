@@ -6,7 +6,12 @@
 // 分けてあり、このファイルはどれにも属さない土台 (型・SFEN トークン表・数値検証) を持つ。
 
 import { PieceType } from 'tsshogi'
-import type { BishopExchange, FormationSide, DefinitionFinishCapture, DefinitionSquare } from './definition.ts'
+import type {
+  BishopExchange,
+  FormationSide,
+  DefinitionFinishCapture,
+  DefinitionSquare,
+} from './definition.ts'
 
 export class DefinitionSyntaxError extends Error {
   /** エラーの起きた行番号 (1 始まり)。 */
@@ -31,9 +36,11 @@ export type PlacementKind =
   | 'anyPiece'
   | 'pieceAnywhere'
   | 'handPiece'
+  | 'opponentHandPiece'
   | 'pieceUnmoved'
   | 'pieceVisited'
   | 'kingIgyoku'
+  | 'kingNotIgyoku'
   // `?X` (升をまたいだ OR)。自駒と相手駒を別の kind にしてあるのは、セルトークンの
   // 解析結果が {kind, pieceTypes} しか運べず、色を載せる場所が kind しか無いため
   // (exact / opponent が分かれているのと同じ理由)。
@@ -117,7 +124,10 @@ export const SFEN_PIECES: readonly (readonly [string, PieceType])[] = [
   ['+R', PieceType.DRAGON],
 ]
 
-export function cell(kind: PlacementKind, partial: Partial<Omit<PlacementCell, 'kind'>>): PlacementCell {
+export function cell(
+  kind: PlacementKind,
+  partial: Partial<Omit<PlacementCell, 'kind'>>,
+): PlacementCell {
   return { kind, file: 0, rank: 0, pieceTypes: [], minCount: 1, squares: [], ...partial }
 }
 

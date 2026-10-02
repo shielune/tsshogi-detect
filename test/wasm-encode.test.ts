@@ -47,6 +47,8 @@ const REQUIREMENT_WORDS: Readonly<Record<number, number>> = {
   9: 2,
   10: 3,
   11: 0,
+  12: 2,
+  13: 0,
 }
 
 type DecodedDefinition = {
@@ -72,8 +74,16 @@ function decode(words: Int32Array): { header: number[]; definitions: DecodedDefi
   const header = take(3)
   const definitions: DecodedDefinition[] = []
   for (let k = 0; k < (header[1] ?? 0); k += 1) {
-    const [nameId = 0, flags = 0, plyEq = 0, plyMin = 0, plyMax = 0, bishop = 0, parent = 0, tier = 0] =
-      take(8)
+    const [
+      nameId = 0,
+      flags = 0,
+      plyEq = 0,
+      plyMin = 0,
+      plyMax = 0,
+      bishop = 0,
+      parent = 0,
+      tier = 0,
+    ] = take(8)
     const finishMoves = Array.from({ length: next() }, () => take(9))
     const placements = Array.from({ length: next() }, () => {
       const code = next()
@@ -106,17 +116,32 @@ describe('encodeDefinitions', () => {
       { name: '居玉形', placements: [new PiecePlacement(5, 9, PieceType.KING)] },
     ])
     expect([...words]).toEqual([
-      FORMAT_VERSION, 1, 1,
+      FORMAT_VERSION,
+      1,
+      1,
       // nameId, flags, plyEq, plyMin, plyMax, bishopExchange, gateParent, tier
-      0, 0, 0, 0, 0, 0, -1, 0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      -1,
+      0,
       // 最終手 0 件、要件 1 件 (piece 5 9 玉 先手)
-      0, 1, 1, 5, 9, 7, 0,
+      0,
+      1,
+      1,
+      5,
+      9,
+      7,
+      0,
     ])
     expect(FORMAT_VERSION).toBe(1)
     expect([...encodeDefinitions([])]).toEqual([FORMAT_VERSION, 0, 0])
   })
 
-  test('要件 11 種の番号と中身', () => {
+  test('要件 13 種の番号と中身', () => {
     const placements: DefinitionRequirement[] = [
       new PiecePlacement(8, 2, PieceType.ROOK, Color.WHITE),
       new AnyOfPieces(4, 8, [PieceType.GOLD, PieceType.SILVER]),
@@ -138,6 +163,8 @@ describe('encodeDefinitions', () => {
       new PieceUnmoved(5, 9),
       new PieceVisited(6, 8, PieceType.KING),
       new KingIgyoku(),
+      new HandPiece(PieceType.BISHOP, 2, Color.WHITE),
+      new KingIgyoku(false),
     ]
     const words = body({ name: '全部', placements })
     expect(words.slice(0, 9)).toEqual([0, 0, 0, 0, 0, 0, -1, 0, 0])
@@ -160,6 +187,8 @@ describe('encodeDefinitions', () => {
       ...[9, 5, 9],
       ...[10, 6, 8, 7],
       ...[11],
+      ...[12, 5, 2],
+      ...[13],
     ])
   })
 
@@ -176,9 +205,18 @@ describe('encodeDefinitions', () => {
     expect(flagsOf({ plyEq: 0 })).toEqual([8, 0, 0, 0])
     expect(flagsOf({ plyMin: 0 })).toEqual([16, 0, 0, 0])
     // false は立てない
-    expect(flagsOf({ category: false, evaluateAtGameEnd: false, noDrop: false })).toEqual([0, 0, 0, 0])
+    expect(flagsOf({ category: false, evaluateAtGameEnd: false, noDrop: false })).toEqual([
+      0, 0, 0, 0,
+    ])
     expect(
-      flagsOf({ category: true, evaluateAtGameEnd: true, noDrop: true, plyEq: 1, plyMin: 2, plyMax: 3 }),
+      flagsOf({
+        category: true,
+        evaluateAtGameEnd: true,
+        noDrop: true,
+        plyEq: 1,
+        plyMin: 2,
+        plyMax: 3,
+      }),
     ).toEqual([63, 1, 2, 3])
   })
 
@@ -204,7 +242,10 @@ describe('encodeDefinitions', () => {
           to: { file: 5, rank: 5 },
           capture: { kind: 'pieces', pieces: [PieceType.BISHOP, PieceType.ROOK], negated: true },
         },
-        { to: { file: 5, rank: 5 }, capture: { kind: 'pieces', pieces: [PieceType.HORSE], negated: false } },
+        {
+          to: { file: 5, rank: 5 },
+          capture: { kind: 'pieces', pieces: [PieceType.HORSE], negated: false },
+        },
         { to: { file: 7, rank: 6 } },
       ],
       placements: [],
@@ -277,7 +318,10 @@ describe('encodeDefinitions', () => {
     reject({ name: '似せ物', placements: [lookalike] })
     reject({ name: '升の外', placements: [new PiecePlacement(0, 5, PieceType.PAWN)] })
     reject({ name: '升の外 2', placements: [new EmptySquare(5, 10)] })
-    reject({ name: '組の升の外', placements: [new PieceInSquares([{ file: 10, rank: 1 }], [PieceType.GOLD])] })
+    reject({
+      name: '組の升の外',
+      placements: [new PieceInSquares([{ file: 10, rank: 1 }], [PieceType.GOLD])],
+    })
     reject({ name: '知らない駒', placements: [new PieceAnywhere('queen' as PieceType)] })
     reject({ name: '端数の手数', plyMin: 1.5, placements: [] })
     reject({ name: '負の手数', plyEq: -1, placements: [] })
@@ -291,10 +335,15 @@ describe('encodeDefinitions', () => {
     })
     reject({
       name: '知らない取り方',
-      finishMoves: [{ to: { file: 5, rank: 5 }, capture: { kind: 'some' } as unknown as { kind: 'any' } }],
+      finishMoves: [
+        { to: { file: 5, rank: 5 }, capture: { kind: 'some' } as unknown as { kind: 'any' } },
+      ],
       placements: [],
     })
-    reject({ name: '知らない色', placements: [new PiecePlacement(5, 5, PieceType.PAWN, 'red' as Color)] })
+    reject({
+      name: '知らない色',
+      placements: [new PiecePlacement(5, 5, PieceType.PAWN, 'red' as Color)],
+    })
   })
 })
 
@@ -308,14 +357,25 @@ describe('encodeGames', () => {
     expect([...lengths]).toEqual([7, 0, 1])
     const code = (text: string): number[] => [...text].map((c) => c.charCodeAt(0))
     expect([...moves]).toEqual([
-      ...code('7g7f'), 0,
-      ...code('P*5e'), 0,
+      ...code('7g7f'),
+      0,
+      ...code('P*5e'),
+      0,
       ...code('8h2b+'),
       ...code('7g7fX'),
-      0x7f, 0x7f, 0x7f, 0x7f, 0,
-      0, 0, 0, 0, 0,
+      0x7f,
+      0x7f,
+      0x7f,
+      0x7f,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
       // 5 文字目はサロゲートの片割れ
-      ...code('7g7f'), 0x7f,
+      ...code('7g7f'),
+      0x7f,
       ...code('resig'),
     ])
   })
@@ -327,7 +387,9 @@ describe('optionBits', () => {
     expect(optionBits({ moverOnly: true })).toBe(SCAN_BITS.moverOnly)
     expect(optionBits({ requireParent: true })).toBe(2)
     expect(optionBits({ suppressGameEndIfDetected: true })).toBe(4)
-    expect(optionBits({ moverOnly: true, requireParent: true, suppressGameEndIfDetected: true })).toBe(7)
+    expect(
+      optionBits({ moverOnly: true, requireParent: true, suppressGameEndIfDetected: true }),
+    ).toBe(7)
     expect(optionBits({ moverOnly: false, requireParent: false })).toBe(0)
     expect(SCAN_BITS).toEqual({
       moverOnly: 1,
@@ -398,9 +460,7 @@ describe('WasmScanner の包み (偽の exports)', () => {
   const definitions = [a, b, dup]
 
   test('出力の組を渡したオブジェクトに戻す。確保した領域は全部返す', () => {
-    const fake = fakeExports((games) =>
-      games === 2 ? [3, 2, 0, 0, 1, 2, 1, 5, 0, 0] : [],
-    )
+    const fake = fakeExports((games) => (games === 2 ? [3, 2, 0, 0, 1, 2, 1, 5, 0, 0] : []))
     const compiled = new WasmScanner(fake.exports).compile(definitions)
     const result = compiled.recordMany([['7g7f', '3c3d', '2g2f'], []], { moverOnly: true })
     expect(result).toHaveLength(2)
@@ -442,12 +502,16 @@ describe('WasmScanner の包み (偽の exports)', () => {
     const withDropped = compiled.recordWithDropped(['7g7f'], { suppressGameEndIfDetected: true })
     expect(fake.scans[1]?.options).toBe(SCAN_BITS.withDropped | SCAN_BITS.suppressGameEndIfDetected)
     expect(withDropped.detections).toEqual([])
-    expect(withDropped.dropped.map((d) => [d.definition, d.side, d.ply])).toEqual([[dup, Color.BLACK, 3]])
+    expect(withDropped.dropped.map((d) => [d.definition, d.side, d.ply])).toEqual([
+      [dup, Color.BLACK, 3],
+    ])
   })
 
   test('出力が壊れていれば投げる', () => {
     const run = (words: number[], status = 0): (() => unknown) => {
-      const compiled = new WasmScanner(fakeExports(() => words, status).exports).compile(definitions)
+      const compiled = new WasmScanner(fakeExports(() => words, status).exports).compile(
+        definitions,
+      )
       return () => compiled.record(['7g7f'])
     }
     expect(run([1, 0])).not.toThrow()
@@ -480,7 +544,9 @@ describe('WasmScanner の包み (偽の exports)', () => {
       return 7
     }
     const bad: FormationDefinition = { name: '升の外', placements: [new EmptySquare(0, 0)] }
-    expect(() => new WasmScanner(fake.exports).compile([a, bad])).toThrow(UnsupportedDefinitionError)
+    expect(() => new WasmScanner(fake.exports).compile([a, bad])).toThrow(
+      UnsupportedDefinitionError,
+    )
     expect(compiled).toBe(0)
     expect(fake.live.size).toBe(0)
   })

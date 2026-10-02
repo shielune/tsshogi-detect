@@ -45,6 +45,8 @@
 //! | 9    | unmoved        | file, rank                               |
 //! | 10   | visited        | file, rank, type                         |
 //! | 11   | igyoku         | (無し)                                   |
+//! | 12   | opponentHand   | type, minCount                           |
+//! | 13   | notIgyoku      | (無し)                                   |
 //!
 //! file/rank は定義視点 (先手視点)。color は定義視点の絶対色で、0 が自陣、1 が相手陣。
 //!
